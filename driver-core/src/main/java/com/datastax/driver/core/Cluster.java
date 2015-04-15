@@ -1474,7 +1474,7 @@ public class Cluster implements Closeable {
 
                 List<ListenableFuture<Boolean>> futures = Lists.newArrayListWithCapacity(sessions.size());
                 for (SessionManager s : sessions)
-                    futures.add(s.forceRenewPool(host, poolCreationExecutor));
+                    futures.add(s.forceRenewPool(host));
 
                 // Only mark the node up once all session have re-added their pool (if the load-balancing
                 // policy says it should), so that Host.isUp() don't return true before we're reconnected
@@ -1821,7 +1821,7 @@ public class Cluster implements Closeable {
 
                 List<ListenableFuture<Boolean>> futures = Lists.newArrayListWithCapacity(sessions.size());
                 for (SessionManager s : sessions)
-                    futures.add(s.maybeAddPool(host, blockingExecutor));
+                    futures.add(s.maybeAddPool(host));
 
                 // Only mark the node up once all session have added their pool (if the load-balancing
                 // policy says it should), so that Host.isUp() don't return true before we're reconnected
