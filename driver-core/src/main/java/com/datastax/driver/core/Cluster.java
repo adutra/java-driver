@@ -1481,29 +1481,40 @@ public class Cluster implements Closeable {
                 // policy says it should), so that Host.isUp() don't return true before we're reconnected
                 // to the node.
                 ListenableFuture<List<Boolean>> f = Futures.allAsList(futures);
+                final CountDownLatch l = new CountDownLatch(1);
                 Futures.addCallback(f, new FutureCallback<List<Boolean>>() {
                     public void onSuccess(List<Boolean> poolCreationResults) {
-                        // If any of the creation failed, they will have signaled a connection failure
-                        // which will trigger a reconnection to the node. So don't bother marking UP.
-                        if (Iterables.any(poolCreationResults, Predicates.equalTo(false))) {
-                            logger.debug("Connection pool cannot be created, not marking {} UP", host);
-                            return;
+                        try {
+                            // If any of the creation failed, they will have signaled a connection failure
+                            // which will trigger a reconnection to the node. So don't bother marking UP.
+                            if (Iterables.any(poolCreationResults, Predicates.equalTo(false))) {
+                                logger.debug("Connection pool cannot be created, not marking {} UP", host);
+                                return;
+                            }
+
+                            host.setUp();
+
+                            for (Host.StateListener listener : listeners)
+                                listener.onUp(host);
+                        } finally {
+                            l.countDown();
                         }
-
-                        host.setUp();
-
-                        for (Host.StateListener listener : listeners)
-                            listener.onUp(host);
                     }
 
                     public void onFailure(Throwable t) {
                         // That future is not really supposed to throw unexpected exceptions
-                        if (!(t instanceof InterruptedException))
-                            logger.error("Unexpected error while marking node UP: while this shouldn't happen, this shouldn't be critical", t);
+                        try {
+                            if (!(t instanceof InterruptedException))
+                                logger.error("Unexpected error while marking node UP: while this shouldn't happen, this shouldn't be critical", t);
+                        } finally {
+                            l.countDown();
+                        }
                     }
                 });
 
                 f.get();
+                // be sure to wait until the last callback is executed
+                l.await();
 
                 // Now, check if there isn't pools to create/remove following the addition.
                 // We do that now only so that it's not called before we've set the node up.
