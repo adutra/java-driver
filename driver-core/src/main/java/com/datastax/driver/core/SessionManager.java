@@ -198,6 +198,7 @@ class SessionManager extends AbstractSession {
 
     // Returns whether there was problem creating the pool
     ListenableFuture<Boolean> forceRenewPool(final Host host, ListeningExecutorService executor) {
+        logger.debug("Renewing pool for {}.", host);
         final HostDistance distance = cluster.manager.loadBalancingPolicy().distance(host);
         if (distance == HostDistance.IGNORED)
             return Futures.immediateFuture(true);
@@ -261,6 +262,12 @@ class SessionManager extends AbstractSession {
             }
         }
 
+        logger.debug("Replacing Pool for {}.", host);
+        try {
+            throw new Exception("");
+        } catch(Exception e) {
+            logger.debug("Replacement stats for {}/{}", host,  host.state, e);
+        }
         ListenableFuture<Void> poolInitFuture = newPool.initAsync();
 
         Futures.addCallback(poolInitFuture, new FutureCallback<Void>() {

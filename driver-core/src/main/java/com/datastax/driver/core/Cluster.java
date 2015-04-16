@@ -1465,12 +1465,13 @@ public class Cluster implements Closeable {
                 // new pool have been created. This is harmless if there is no prior pool since RequestHandler
                 // will ignore the node, but we do want to make sure there is no prior pool so we don't
                 // query from a pool we will shutdown right away.
+                logger.debug("Removing pools for {}", host);
                 for (SessionManager s : sessions)
                     s.removePool(host);
                 loadBalancingPolicy().onUp(host);
                 controlConnection.onUp(host);
 
-                logger.trace("Adding/renewing host pools for newly UP host {}", host);
+                logger.debug("Adding/renewing host pools for newly UP host {}", host);
 
                 List<ListenableFuture<Boolean>> futures = Lists.newArrayListWithCapacity(sessions.size());
                 for (SessionManager s : sessions)
@@ -1519,6 +1520,11 @@ public class Cluster implements Closeable {
         }
 
         public ListenableFuture<?> triggerOnDown(final Host host, final boolean isHostAddition, final boolean startReconnection) {
+            try {
+                throw new Exception("");
+            } catch (Exception e) {
+                logger.debug("Triggering down for {}/{}/{}.", host, isHostAddition, startReconnection, e);
+            }
             return executor.submit(new ExceptionCatchingRunnable() {
                 @Override
                 public void runMayThrow() throws InterruptedException, ExecutionException {
@@ -1554,8 +1560,12 @@ public class Cluster implements Closeable {
             // consider the host suspect but simply ignore it). So we synchronize.
             synchronized (host) {
                 // If we've already marked the node down/suspected, ignore this
-                if (!host.setSuspected() || host.reconnectionAttempt.get() != null)
+                if (!host.setSuspected() || host.reconnectionAttempt.get() != null) {
+                    logger.debug("Host {} already marked suspected. {}/{}", host, host.state, host.reconnectionAttempt.get());
                     return;
+                } else {
+                    logger.debug("Scheduling Initial Reconnection attempt for {}", host);
+                }
 
                 // Start the initial initial reconnection attempt
                 host.initialReconnectionAttempt.set(executor.submit(new ExceptionCatchingRunnable() {
@@ -1563,6 +1573,7 @@ public class Cluster implements Closeable {
                     public void runMayThrow() throws InterruptedException, ExecutionException {
                         boolean success;
                         try {
+                            logger.debug("In initial reconnection attempt for {}", host);
                             // TODO: as for the ReconnectionHandler, we could avoid "wasting" this connection
                             connectionFactory.open(host).closeAsync();
                             // Note that we want to do the pool creation on this thread because we want that
@@ -1576,8 +1587,10 @@ public class Cluster implements Closeable {
                         } catch (Exception e) {
                             success = false;
                         }
-                        if (!success)
+                        if (!success) {
+                            logger.debug("Was not successful marking host {} up. triggering onDown with Suspect Verification.", host);
                             onDown(host, false, true, true);
+                        }
                     }
                 }));
 
@@ -1594,7 +1607,12 @@ public class Cluster implements Closeable {
 
         // Use triggerOnDown unless you're sure you want to run this on the current thread.
         private void onDown(final Host host, final boolean isHostAddition, final boolean isSuspectedVerification, boolean startReconnection) throws InterruptedException, ExecutionException {
-            logger.debug("Host {} is DOWN", host);
+            logger.debug("Host {} is DOWN. {}/{}/{}", host, isHostAddition, isSuspectedVerification, startReconnection);
+            try {
+                throw new Exception("");
+            } catch(Exception e) {
+                logger.debug("Host {} down trace", host, e);
+            }
 
             if (isClosed())
                 return;
@@ -1605,7 +1623,7 @@ public class Cluster implements Closeable {
                 return;
             }
             try {
-
+                logger.debug("Lock let go, proceeding for {}", host);
                 // If we're SUSPECT and not the task validating the suspicion, then some other task is
                 // already checking to verify if the node is really down (or if it's simply that the
                 // connections where broken). So just skip this in that case.

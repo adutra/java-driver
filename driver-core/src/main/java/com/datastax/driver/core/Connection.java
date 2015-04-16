@@ -362,7 +362,7 @@ class Connection {
 
     <E extends Exception> E defunct(E e) {
         if (logger.isDebugEnabled())
-            logger.debug("Defuncting connection to " + address, e);
+            logger.debug("Defuncting connection to " + address + " " + this.toString(), e);
         isDefunct = true;
 
         ConnectionException ce = e instanceof ConnectionException
@@ -523,7 +523,7 @@ class Connection {
 
                     final ConnectionException ce;
                     if (writeFuture.cause() instanceof java.nio.channels.ClosedChannelException) {
-                        ce = new TransportException(address, "Error writing: Closed channel");
+                        ce = new TransportException(address, "Error writing: Closed channel " + Connection.this.toString());
                     } else {
                         ce = new TransportException(address, "Error writing", writeFuture.cause());
                     }
@@ -570,6 +570,11 @@ class Connection {
         }
 
         logger.debug("{} closing connection", this);
+        try {
+            throw new Exception("");
+        } catch(Exception e) {
+            logger.debug("Close stats for {}", this, e);
+        }
 
         boolean terminated = tryTerminate(false);
         if (!terminated) {

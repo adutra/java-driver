@@ -264,11 +264,21 @@ public class Host {
 
     void setDown() {
         state = State.DOWN;
+        try {
+            throw new Exception("");
+        } catch(Exception e) {
+            logger.debug("Setting host {} DOWN.", this, e);
+        }
     }
 
     void setUp() {
         policy.reset();
         state = State.UP;
+        try {
+            throw new Exception("");
+        } catch(Exception e) {
+            logger.debug("Setting host {} UP.", this, e);
+        }
     }
 
     boolean setSuspected() {
