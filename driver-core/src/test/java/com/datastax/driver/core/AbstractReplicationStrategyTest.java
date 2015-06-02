@@ -25,7 +25,10 @@ import java.util.Set;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
-import static org.testng.Assert.*;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Base class for replication strategy tests. Currently only supports testing
@@ -39,7 +42,7 @@ public class AbstractReplicationStrategyTest {
         private final String address;
 
         private HostMock(String address) throws UnknownHostException {
-            super(new InetSocketAddress(InetAddress.getByName(address), 9042), new ConvictionPolicy.Simple.Factory(), null);
+            super(new InetSocketAddress(InetAddress.getByName(address), 9042), new Cluster("test", null, null).manager);
             this.address = address;
         }
 

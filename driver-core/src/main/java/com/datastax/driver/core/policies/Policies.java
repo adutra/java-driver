@@ -15,6 +15,10 @@
  */
 package com.datastax.driver.core.policies;
 
+import java.net.InetSocketAddress;
+import java.util.List;
+
+import com.datastax.driver.core.DefaultDiscoveryPolicy;
 import com.datastax.driver.core.ServerSideTimestampGenerator;
 import com.datastax.driver.core.TimestampGenerator;
 
@@ -34,9 +38,11 @@ public class Policies {
     private final AddressTranslater addressTranslater;
     private final TimestampGenerator timestampGenerator;
     private final SpeculativeExecutionPolicy speculativeExecutionPolicy;
+    private final DiscoveryPolicy discoveryPolicy;
 
     public Policies() {
-        this(defaultLoadBalancingPolicy(), defaultReconnectionPolicy(), defaultRetryPolicy(), defaultAddressTranslater(), defaultTimestampGenerator(), defaultSpeculativeExecutionPolicy());
+        this(defaultLoadBalancingPolicy(), defaultReconnectionPolicy(), defaultRetryPolicy(), defaultAddressTranslater(),
+            defaultTimestampGenerator(), defaultSpeculativeExecutionPolicy(), defaultDiscoveryPolicy());
     }
 
     /**
@@ -47,6 +53,7 @@ public class Policies {
      * @param loadBalancingPolicy the load balancing policy to use.
      * @param reconnectionPolicy the reconnection policy to use.
      * @param retryPolicy the retry policy to use.
+     * @param speculativeExecutionPolicy the speculative execution policy to use.
      */
     public Policies(LoadBalancingPolicy loadBalancingPolicy,
                     ReconnectionPolicy reconnectionPolicy,
@@ -75,6 +82,7 @@ public class Policies {
         this.addressTranslater = addressTranslater;
         this.speculativeExecutionPolicy = speculativeExecutionPolicy;
         this.timestampGenerator = defaultTimestampGenerator();
+        this.discoveryPolicy = defaultDiscoveryPolicy();
     }
 
     /**
@@ -86,19 +94,22 @@ public class Policies {
      * @param addressTranslater the address translater to use.
      * @param timestampGenerator the timestamp generator to use.
      * @param speculativeExecutionPolicy the speculative execution policy to use.
+     * @param discoveryPolicy the discovery policy to use.
      */
     public Policies(LoadBalancingPolicy loadBalancingPolicy,
                     ReconnectionPolicy reconnectionPolicy,
                     RetryPolicy retryPolicy,
                     AddressTranslater addressTranslater,
                     TimestampGenerator timestampGenerator,
-                    SpeculativeExecutionPolicy speculativeExecutionPolicy) {
+                    SpeculativeExecutionPolicy speculativeExecutionPolicy,
+                    DiscoveryPolicy discoveryPolicy) {
         this.loadBalancingPolicy = loadBalancingPolicy;
         this.reconnectionPolicy = reconnectionPolicy;
         this.retryPolicy = retryPolicy;
         this.addressTranslater = addressTranslater;
         this.timestampGenerator = timestampGenerator;
         this.speculativeExecutionPolicy = speculativeExecutionPolicy;
+        this.discoveryPolicy = discoveryPolicy;
     }
 
     /**
@@ -165,14 +176,25 @@ public class Policies {
     }
 
     /**
-     * The default speculative retry policy.
+     * The default speculative execution policy.
      * <p>
-     * The default speculative retry policy is a {@link NoSpeculativeExecutionPolicy}.
+     * The default speculative execution policy is a {@link NoSpeculativeExecutionPolicy}.
      *
-     * @return the default speculative retry policy.
+     * @return the default speculative execution policy.
      */
     public static SpeculativeExecutionPolicy defaultSpeculativeExecutionPolicy() {
         return DEFAULT_SPECULATIVE_EXECUTION_POLICY;
+    }
+
+    /**
+     * The default discovery policy.
+     * <p>
+     * The default discovery policy is a {@link com.datastax.driver.core.DefaultDiscoveryPolicy}.
+     *
+     * @return the default discovery policy.
+     */
+    public static DiscoveryPolicy defaultDiscoveryPolicy() {
+        return new DefaultDiscoveryPolicy();
     }
 
     /**
@@ -234,5 +256,14 @@ public class Policies {
      */
     public SpeculativeExecutionPolicy getSpeculativeExecutionPolicy() {
         return speculativeExecutionPolicy;
+    }
+
+    /**
+     * The discovery policy in use.
+     *
+     * @return the discovery policy in use.
+     */
+    public DiscoveryPolicy getDiscoveryPolicy() {
+        return discoveryPolicy;
     }
 }

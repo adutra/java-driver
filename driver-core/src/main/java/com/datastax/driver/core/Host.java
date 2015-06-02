@@ -36,8 +36,20 @@ public class Host {
 
     private static final Logger logger = LoggerFactory.getLogger(Host.class);
 
-
     private final InetSocketAddress address;
+
+    public static class Factory {
+
+        private final Cluster.Manager cluster;
+
+        Factory(Cluster.Manager cluster) {
+            this.cluster = cluster;
+        }
+
+        public Host newHost(InetSocketAddress address) {
+            return new Host(address, cluster);
+        }
+    }
 
     enum State { ADDED, DOWN, UP }
     volatile State state;
@@ -67,12 +79,11 @@ public class Host {
     // ClusterMetadata keeps one Host object per inet address and we rely on this (more precisely,
     // we rely on the fact that we can use Object equality as a valid equality), so don't use
     // that constructor but ClusterMetadata.getHost instead.
-    Host(InetSocketAddress address, ConvictionPolicy.Factory policy, Cluster.Manager manager) {
-        if (address == null || policy == null)
+    Host(InetSocketAddress address, Cluster.Manager manager) {
+        if (address == null)
             throw new NullPointerException();
-
         this.address = address;
-        this.policy = policy.create(this);
+        this.policy = manager.convictionPolicyFactory.create(this);
         this.manager = manager;
         this.defaultExecutionInfo = new ExecutionInfo(ImmutableList.of(this));
         this.state = State.ADDED;
@@ -83,10 +94,7 @@ public class Host {
         this.rack = rack;
     }
 
-    void setVersionAndListenAdress(String cassandraVersion, InetAddress listenAddress) {
-        if (listenAddress != null)
-            this.listenAddress = listenAddress;
-
+    void setVersion(String cassandraVersion) {
         if (cassandraVersion == null)
             return;
         try {
@@ -94,6 +102,11 @@ public class Host {
         } catch (IllegalArgumentException e) {
             logger.warn("Error parsing Cassandra version {}. This shouldn't have happened", cassandraVersion);
         }
+    }
+
+    void setListenAdress(InetAddress listenAddress) {
+        if (listenAddress != null)
+            this.listenAddress = listenAddress;
     }
 
     /**
@@ -351,4 +364,5 @@ public class Host {
          */
         public void onRemove(Host host);
     }
+
 }

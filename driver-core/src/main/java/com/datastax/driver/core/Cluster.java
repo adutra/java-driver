@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.datastax.driver.core.exceptions.AuthenticationException;
+import com.datastax.driver.core.exceptions.DiscoveryException;
 import com.datastax.driver.core.exceptions.DriverInternalError;
 import com.datastax.driver.core.exceptions.NoHostAvailableException;
 import com.datastax.driver.core.policies.*;
@@ -108,9 +109,9 @@ public class Cluster implements Closeable {
      */
     protected Cluster(Initializer initializer) {
         this(initializer.getClusterName(),
-             checkNotEmpty(initializer.getContactPoints()),
-             initializer.getConfiguration(),
-             initializer.getInitialListeners());
+            checkNotEmpty(initializer.getContactPoints()),
+            initializer.getConfiguration(),
+            initializer.getInitialListeners());
     }
 
     private static List<InetSocketAddress> checkNotEmpty(List<InetSocketAddress> contactPoints) {
@@ -360,6 +361,15 @@ public class Cluster implements Closeable {
     }
 
     /**
+     * The  currently known cluster's hosts.
+     * @return The  currently known cluster's hosts.
+     */
+    public Map<InetSocketAddress, Host> getAllHosts(){
+        checkNotClosed(manager);
+        return ImmutableMap.copyOf(manager.metadata.hosts);
+    }
+
+    /**
      * Registers the provided listener to be notified on hosts
      * up/down/added/removed events.
      * <p>
@@ -575,6 +585,7 @@ public class Cluster implements Closeable {
         private AddressTranslater addressTranslater;
         private TimestampGenerator timestampGenerator;
         private SpeculativeExecutionPolicy speculativeExecutionPolicy;
+        private DiscoveryPolicy discoveryPolicy;
 
         private ProtocolOptions.Compression compression = ProtocolOptions.Compression.NONE;
         private SSLOptions sslOptions = null;
@@ -940,6 +951,19 @@ public class Cluster implements Closeable {
         }
 
         /**
+         * Configures the discovery policy to use for the new cluster.
+         * <p>
+         * If no policy is set through this method, a default one
+         * will be created.
+         * @param policy the policy to use.
+         * @return this Builder.
+         */
+        public Builder withDiscoveryPolicy(DiscoveryPolicy policy) {
+            this.discoveryPolicy = policy;
+            return this;
+        }
+
+        /**
          * Uses the provided credentials when connecting to Cassandra hosts.
          * <p>
          * This should be used if the Cassandra cluster has been configured to
@@ -1128,7 +1152,8 @@ public class Cluster implements Closeable {
                 Objects.firstNonNull(retryPolicy, Policies.defaultRetryPolicy()),
                 Objects.firstNonNull(addressTranslater, Policies.defaultAddressTranslater()),
                 Objects.firstNonNull(timestampGenerator, Policies.defaultTimestampGenerator()),
-                Objects.firstNonNull(speculativeExecutionPolicy, Policies.defaultSpeculativeExecutionPolicy())
+                Objects.firstNonNull(speculativeExecutionPolicy, Policies.defaultSpeculativeExecutionPolicy()),
+                Objects.firstNonNull(discoveryPolicy, Policies.defaultDiscoveryPolicy())
             );
             return new Configuration(policies,
                                      new ProtocolOptions(port, protocolVersion, maxSchemaAgreementWaitSeconds, sslOptions, authProvider).setCompression(compression),
@@ -1189,6 +1214,7 @@ public class Cluster implements Closeable {
         Connection.Factory connectionFactory;
         ControlConnection controlConnection;
 
+        Host.Factory hostFactory;
         final ConvictionPolicy.Factory convictionPolicyFactory = new ConvictionPolicy.Simple.Factory();
 
         ScheduledThreadPoolExecutor reconnectionExecutor;
@@ -1253,15 +1279,14 @@ public class Cluster implements Closeable {
             this.controlConnection = new ControlConnection(this);
             this.metrics = configuration.getMetricsOptions() == null ? null : new Metrics(this);
             this.preparedQueries = new MapMaker().weakValues().makeMap();
-
+            this.hostFactory = new Host.Factory(this);
             this.scheduledTasksExecutor.scheduleWithFixedDelay(new CleanupIdleConnectionsTask(), 10, 10, TimeUnit.SECONDS);
-
 
             for (InetSocketAddress address : contactPoints) {
                 // We don't want to signal -- call onAdd() -- because nothing is ready
                 // yet (loadbalancing policy, control connection, ...). All we want is
                 // create the Host object so we can initialize the control connection.
-                metadata.add(address);
+                metadata.add(hostFactory.newHost(address));
             }
 
             // At this stage, metadata.allHosts() only contains the contact points, that's what we want to pass to LBP.init().
@@ -1269,6 +1294,9 @@ public class Cluster implements Closeable {
             Set<Host> contactPointHosts = Sets.newHashSet(metadata.allHosts());
 
             try {
+
+                discoveryPolicy().init(Cluster.this);
+
                 try {
                     controlConnection.connect();
                 } catch (UnsupportedProtocolVersionException e) {
@@ -1325,6 +1353,9 @@ public class Cluster implements Closeable {
             } catch (NoHostAvailableException e) {
                 close();
                 throw e;
+            } catch (DiscoveryException e) {
+                close();
+                throw e;
             }
         }
 
@@ -1362,6 +1393,10 @@ public class Cluster implements Closeable {
 
         ReconnectionPolicy reconnectionPolicy() {
             return configuration.getPolicies().getReconnectionPolicy();
+        }
+
+        DiscoveryPolicy discoveryPolicy() {
+            return configuration.getPolicies().getDiscoveryPolicy();
         }
 
         InetSocketAddress translateAddress(InetAddress address) {
@@ -1426,6 +1461,9 @@ public class Cluster implements Closeable {
                 futures.add(controlConnection.closeAsync());
                 for (Session session : sessions)
                     futures.add(session.closeAsync());
+
+                // close discovery policy
+                discoveryPolicy().close();
 
                 future = new ClusterCloseFuture(futures);
                 // The rest will happen asynchronously, when all connections are successfully closed
@@ -1943,7 +1981,9 @@ public class Cluster implements Closeable {
                     : reusedConnection;
 
                 try {
-                    ControlConnection.waitForSchemaAgreement(connection, this);
+                    controlConnection.waitForSchemaAgreement(connection, this);
+                } catch (DiscoveryException e) {
+                    // As below, just move on
                 } catch (ExecutionException e) {
                     // As below, just move on
                 }
@@ -2041,11 +2081,11 @@ public class Cluster implements Closeable {
                     try {
                         // Before refreshing the schema, wait for schema agreement so
                         // that querying a table just after having created it don't fail.
-                        schemaInAgreement = ControlConnection.waitForSchemaAgreement(connection, Manager.this);
+                        schemaInAgreement = controlConnection.waitForSchemaAgreement(connection, Manager.this);
                         if (!schemaInAgreement)
                             logger.warn("No schema agreement from live replicas after {} s. The schema may not be up to date on some nodes.", configuration.getProtocolOptions().getMaxSchemaAgreementWaitSeconds());
                         if (refreshSchema)
-                            ControlConnection.refreshSchema(connection, targetType, targetKeyspace, targetName, Manager.this, false);
+                            controlConnection.refreshSchema(connection, targetType, targetKeyspace, targetName, Manager.this);
                     } catch (Exception e) {
                         if (refreshSchema) {
                             logger.error("Error during schema refresh ({}). The schema from Cluster.getMetadata() might appear stale. Asynchronously submitting job to fix.", e.getMessage());
@@ -2082,7 +2122,7 @@ public class Cluster implements Closeable {
                     InetSocketAddress tpAddr = translateAddress(tpc.node.getAddress());
                     switch (tpc.change) {
                         case NEW_NODE:
-                            final Host newHost = metadata.add(tpAddr);
+                            final Host newHost = metadata.add(hostFactory.newHost(tpAddr));
                             if (newHost != null) {
                                 // Cassandra tends to send notifications for new/up nodes a bit early (it is triggered once
                                 // gossip is up, but that is before the client-side server is up), so we add a delay
@@ -2122,7 +2162,7 @@ public class Cluster implements Closeable {
                         case UP:
                             final Host hostUp = metadata.getHost(stAddr);
                             if (hostUp == null) {
-                                final Host h = metadata.add(stAddr);
+                                final Host h = metadata.add(hostFactory.newHost(stAddr));
                                 // If hostUp is still null, it means we didn't knew about it the line before but
                                 // got beaten at adding it to the metadata by another thread. In that case, it's
                                 // fine to let the other thread win and ignore the notification here

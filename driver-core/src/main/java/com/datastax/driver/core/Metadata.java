@@ -44,7 +44,7 @@ public class Metadata {
     private final Cluster.Manager cluster;
     volatile String clusterName;
     volatile String partitioner;
-    private final ConcurrentMap<InetSocketAddress, Host> hosts = new ConcurrentHashMap<InetSocketAddress, Host>();
+    final ConcurrentMap<InetSocketAddress, Host> hosts = new ConcurrentHashMap<InetSocketAddress, Host>();
     private final ConcurrentMap<String, KeyspaceMetadata> keyspaces = new ConcurrentHashMap<String, KeyspaceMetadata>();
     volatile TokenMap tokenMap;
 
@@ -207,10 +207,9 @@ public class Metadata {
         this.tokenMap = TokenMap.build(factory, allTokens, keyspaces.values());
     }
 
-    Host add(InetSocketAddress address) {
-        Host newHost = new Host(address, cluster.convictionPolicyFactory, cluster);
-        Host previous = hosts.putIfAbsent(address, newHost);
-        return previous == null ? newHost : null;
+    Host add(Host host) {
+        Host previous = hosts.putIfAbsent(host.getSocketAddress(), host);
+        return previous == null ? host : null;
     }
 
     boolean remove(Host host) {
