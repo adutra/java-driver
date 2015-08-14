@@ -202,7 +202,7 @@ public class IndexMetadataTest extends CCMBridge.PerClassSingleNodeCluster {
             wrap("{\"foo\" : \"bar\", \"class_name\" : \"dummy.DummyIndex\"}") // index options
             );
         Row row = ArrayBackedRow.fromData(defs, M3PToken.FACTORY, ProtocolVersion.V3, data);
-        ColumnMetadata column = ColumnMetadata.fromRaw(table, Raw.fromRow(row, VersionNumber.parse("2.1"), ProtocolVersion.V3, new CodecRegistry()));
+        ColumnMetadata column = ColumnMetadata.fromRaw(table, Raw.fromRow(row, VersionNumber.parse("2.1")));
         IndexMetadata index = column.getIndex();
         assertThat(index).hasName("custom_index")
             .isNotKeys()
@@ -238,9 +238,7 @@ public class IndexMetadataTest extends CCMBridge.PerClassSingleNodeCluster {
         );
         Row row = ArrayBackedRow.fromData(defs, M3PToken.FACTORY, ProtocolVersion.V3, data);
         ColumnMetadata column = ColumnMetadata.fromRaw(table,
-            Raw.fromRow(row, VersionNumber.parse("2.1"),
-                cluster.getConfiguration().getProtocolOptions().getProtocolVersion(),
-                cluster.getConfiguration().getCodecRegistry()));
+            Raw.fromRow(row, VersionNumber.parse("2.1")));
         IndexMetadata index = column.getIndex();
 
         assertThat(index).hasName("cfs_archive_parent_path")

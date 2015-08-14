@@ -20,6 +20,7 @@ import java.util.*;
 
 import com.beust.jcommander.internal.Lists;
 import com.google.common.base.Joiner;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -30,17 +31,24 @@ import com.datastax.driver.core.utils.CassandraVersion;
 @CassandraVersion(major=2.1)
 public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
 
-    ProtocolVersion protocolVersion = TestUtils.getDesiredProtocolVersion();
+    ProtocolVersion protocolVersion;
+    CodecRegistry codecRegistry;
 
     @Override
     protected Collection<String> getTableDefinitions() {
         return Arrays.asList("CREATE TABLE t (k int PRIMARY KEY, v frozen<tuple<int, text, float>>)");
     }
 
+    @BeforeMethod
+    public void setUp() throws Exception {
+        protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
+    }
+
     @Test(groups = "short")
     public void simpleValueTest() throws Exception {
-        TupleType t = cluster.getMetadata().newTupleType(DataType.cint(), DataType.text(), DataType.cfloat());
-        TupleValue v = t.newValue();
+        TupleType t = TupleType.of(DataType.cint(), DataType.text(), DataType.cfloat());
+        TupleValue v = t.newValue(protocolVersion, codecRegistry);
         v.setInt(0, 1);
         v.setString(1, "a");
         v.setFloat(2, 1.0f);
@@ -54,7 +62,7 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
         assertEquals(v.getString(1), "a");
         assertEquals(v.getFloat(2), 1.0f);
 
-        assertEquals(new TypeCodec.TupleCodec(t).format(v), "(1, 'a', 1.0)");
+        assertEquals(new TypeCodec.TupleCodec(t, codecRegistry).format(v), "(1, 'a', 1.0)");
     }
 
     @Test(groups = "short")
@@ -64,10 +72,10 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
             PreparedStatement ins = session.prepare("INSERT INTO t(k, v) VALUES (?, ?)");
             PreparedStatement sel = session.prepare("SELECT * FROM t WHERE k=?");
 
-            TupleType t = cluster.getMetadata().newTupleType(DataType.cint(), DataType.text(), DataType.cfloat());
+            TupleType t = TupleType.of(DataType.cint(), DataType.text(), DataType.cfloat());
 
             int k = 1;
-            TupleValue v = t.newValue(1, "a", 1.0f);
+            TupleValue v = t.newValue(protocolVersion, codecRegistry).bind(1, "a", 1.0f);
 
             session.execute(ins.bind(k, v));
             TupleValue v2 = session.execute(sel.bind(k)).one().getTupleValue("v");
@@ -76,7 +84,7 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // Test simple statement interpolation
             k = 2;
-            v = t.newValue(2, "b", 2.0f);
+            v = t.newValue(protocolVersion, codecRegistry).bind(2, "b", 2.0f);
 
             session.execute("INSERT INTO t(k, v) VALUES (?, ?)", k, v);
             v2 = session.execute(sel.bind(k)).one().getTupleValue("v");
@@ -101,38 +109,38 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
             session.execute("USE test_tuple_type");
             session.execute("CREATE TABLE mytable (a int PRIMARY KEY, b frozen<tuple<ascii, int, boolean>>)");
 
-            TupleType t = cluster.getMetadata().newTupleType(DataType.ascii(), DataType.cint(), DataType.cboolean());
+            TupleType t = TupleType.of(DataType.ascii(), DataType.cint(), DataType.cboolean());
 
             // test non-prepared statement
-            TupleValue complete = t.newValue("foo", 123, true);
+            TupleValue complete = t.newValue(protocolVersion, codecRegistry).bind("foo", 123, true);
             session.execute("INSERT INTO mytable (a, b) VALUES (0, ?)", complete);
             TupleValue r = session.execute("SELECT b FROM mytable WHERE a=0").one().getTupleValue("b");
             assertEquals(r, complete);
 
             // test incomplete tuples
             try {
-                TupleValue partial = t.newValue("bar", 456);
+                TupleValue partial = t.newValue(protocolVersion, codecRegistry).bind("bar", 456);
                 fail();
             } catch (IllegalArgumentException e) {}
 
             // test incomplete tuples with new TupleType
-            TupleType t1 = cluster.getMetadata().newTupleType(DataType.ascii(), DataType.cint());
-            TupleValue partial = t1.newValue("bar", 456);
-            TupleValue partionResult = t.newValue("bar", 456, null);
+            TupleType t1 = TupleType.of(DataType.ascii(), DataType.cint());
+            TupleValue partial = t1.newValue(protocolVersion, codecRegistry).bind("bar", 456);
+            TupleValue partionResult = t.newValue(protocolVersion, codecRegistry).bind("bar", 456, null);
             session.execute("INSERT INTO mytable (a, b) VALUES (0, ?)", partial);
             r = session.execute("SELECT b FROM mytable WHERE a=0").one().getTupleValue("b");
             assertEquals(r, partionResult);
 
             // test single value tuples
             try {
-                TupleValue subpartial = t.newValue("zoo");
+                TupleValue subpartial = t.newValue(protocolVersion, codecRegistry).bind("zoo");
                 fail();
             } catch (IllegalArgumentException e) {}
 
             // test single value tuples with new TupleType
-            TupleType t2 = cluster.getMetadata().newTupleType(DataType.ascii());
-            TupleValue subpartial = t2.newValue("zoo");
-            TupleValue subpartialResult = t.newValue("zoo", null, null);
+            TupleType t2 = TupleType.of(DataType.ascii());
+            TupleValue subpartial = t2.newValue(protocolVersion, codecRegistry).bind("zoo");
+            TupleValue subpartialResult = t.newValue(protocolVersion, codecRegistry).bind("zoo", null, null);
             session.execute("INSERT INTO mytable (a, b) VALUES (0, ?)", subpartial);
             r = session.execute("SELECT b FROM mytable WHERE a=0").one().getTupleValue("b");
             assertEquals(r, subpartialResult);
@@ -190,8 +198,8 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
                     dataTypes.add(DataType.cint());
                     values.add(j);
                 }
-                TupleType t = new TupleType(dataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleValue createdTuple = t.newValue(values.toArray());
+                TupleType t = new TupleType(dataTypes);
+                TupleValue createdTuple = t.newValue(protocolVersion, codecRegistry).bind(values.toArray());
 
                 // write tuple
                 session.execute(String.format("INSERT INTO mytable (k, v_%s) VALUES (0, ?)", i), createdTuple);
@@ -252,10 +260,10 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
                 }
 
                 // actually create the tuples
-                TupleType t = new TupleType(dataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleType t2 = new TupleType(completeDataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleValue createdTuple = t.newValue(createdValues.toArray());
-                TupleValue completeTuple = t2.newValue(completeValues.toArray());
+                TupleType t = new TupleType(dataTypes);
+                TupleType t2 = new TupleType(completeDataTypes);
+                TupleValue createdTuple = t.newValue(protocolVersion, codecRegistry).bind(createdValues.toArray());
+                TupleValue completeTuple = t2.newValue(protocolVersion, codecRegistry).bind(completeValues.toArray());
 
                 // write tuple
                 session.execute(String.format("INSERT INTO mytable (k, v) VALUES (%s, ?)", i), createdTuple);
@@ -320,8 +328,8 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
                 dataTypes.add(DataType.list(datatype));
                 createdValues.add(Arrays.asList(PrimitiveTypeSamples.ALL.get(datatype)));
 
-                TupleType t = new TupleType(dataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleValue createdTuple = t.newValue(createdValues.toArray());
+                TupleType t = new TupleType(dataTypes);
+                TupleValue createdTuple = t.newValue(protocolVersion, codecRegistry).bind(createdValues.toArray());
 
                 // write tuple
                 session.execute(String.format("INSERT INTO mytable (k, v_%s) VALUES (0, ?)", i), createdTuple);
@@ -343,8 +351,8 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
                 dataTypes.add(DataType.set(datatype));
                 createdValues.add(new HashSet<Object>(Arrays.asList(PrimitiveTypeSamples.ALL.get(datatype))));
 
-                TupleType t = new TupleType(dataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleValue createdTuple = t.newValue(createdValues.toArray());
+                TupleType t = new TupleType(dataTypes);
+                TupleValue createdTuple = t.newValue(protocolVersion, codecRegistry).bind(createdValues.toArray());
 
                 // write tuple
                 session.execute(String.format("INSERT INTO mytable (k, v_%s) VALUES (0, ?)", i), createdTuple);
@@ -369,8 +377,8 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
                 dataTypes.add(DataType.map(datatype, datatype));
                 createdValues.add(hm);
 
-                TupleType t = new TupleType(dataTypes, protocolVersion, cluster.getConfiguration().getCodecRegistry());
-                TupleValue createdTuple = t.newValue(createdValues.toArray());
+                TupleType t = new TupleType(dataTypes);
+                TupleValue createdTuple = t.newValue(protocolVersion, codecRegistry).bind(createdValues.toArray());
 
                 // write tuple
                 session.execute(String.format("INSERT INTO mytable (k, v_%s) VALUES (0, ?)", i), createdTuple);
@@ -407,12 +415,12 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
      */
     private TupleValue nestedTuplesCreatorHelper(int depth) {
         if (depth == 1) {
-            TupleType baseTuple = cluster.getMetadata().newTupleType(DataType.cint());
-            return baseTuple.newValue(303);
+            TupleType baseTuple = TupleType.of(DataType.cint());
+            return baseTuple.newValue(protocolVersion, codecRegistry).bind(303);
         } else {
             TupleValue innerTuple = nestedTuplesCreatorHelper(depth - 1);
-            TupleType t = cluster.getMetadata().newTupleType(innerTuple.getType());
-            return t.newValue(innerTuple);
+            TupleType t = TupleType.of(innerTuple.getType());
+            return t.newValue(protocolVersion, codecRegistry).bind(innerTuple);
         }
     }
 
@@ -479,10 +487,10 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // insert UDT data
             UserType userTypeDef = cluster.getMetadata().getKeyspace("testTuplesWithNulls").getUserType("user");
-            UDTValue userType = userTypeDef.newValue();
+            UDTValue userType = userTypeDef.newValue(protocolVersion, codecRegistry);
 
-            TupleType t = cluster.getMetadata().newTupleType(DataType.text(), DataType.cint(), DataType.uuid(), DataType.blob());
-            TupleValue v = t.newValue(null, null, null, null);
+            TupleType t = TupleType.of(DataType.text(), DataType.cint(), DataType.uuid(), DataType.blob());
+            TupleValue v = t.newValue(protocolVersion, codecRegistry).bind(null, null, null, null);
             userType.setTupleValue("b", v);
 
             PreparedStatement ins = session.prepare("INSERT INTO mytable (a, b) VALUES (?, ?)");
@@ -499,7 +507,7 @@ public class TupleTest extends CCMBridge.PerClassSingleNodeCluster {
             assertEquals(row.getUDTValue("b"), userType);
 
             // test empty strings
-            v = t.newValue("", null, null, ByteBuffer.allocate(0));
+            v = t.newValue(protocolVersion, codecRegistry).bind("", null, null, ByteBuffer.allocate(0));
             userType.setTupleValue("b", v);
             session.execute(ins.bind(0, userType));
 

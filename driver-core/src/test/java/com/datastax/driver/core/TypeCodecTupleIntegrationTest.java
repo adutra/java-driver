@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.UUID;
 
 import com.google.common.collect.Lists;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,8 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
     private Location location;
     private Location partialLocation;
     private TupleValue partialLocationValueRetrieved;
+    private ProtocolVersion protocolVersion;
+    private CodecRegistry codecRegistry;
 
     @Override
     protected Collection<String> getTableDefinitions() {
@@ -50,6 +53,12 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
         );
     }
 
+    @BeforeMethod(groups = "short")
+    public void setUp() throws Exception {
+        protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
+    }
+    
     @Test(groups = "short")
     public void should_handle_tuples_with_default_codecs() {
         setUpTupleTypes(cluster);
@@ -114,7 +123,7 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
             Session session = cluster.connect(keyspace);
             setUpTupleTypes(cluster);
             codecRegistry
-                .register(new LocationCodec(new TypeCodec.TupleCodec(locationType)))
+                .register(new LocationCodec(new TypeCodec.TupleCodec(locationType, codecRegistry)))
             ;
             session.execute(insertQuery, uuid, "John Doe", locationValue);
             ResultSet rows = session.execute(selectQuery, uuid);
@@ -150,7 +159,7 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
             Session session = cluster.connect(keyspace);
             setUpTupleTypes(cluster);
             codecRegistry
-                .register(new LocationCodec(new TypeCodec.TupleCodec(locationType)))
+                .register(new LocationCodec(new TypeCodec.TupleCodec(locationType, codecRegistry)))
             ;
             session.execute(insertQuery, uuid, "John Doe", partialLocationValueInserted);
             ResultSet rows = session.execute(selectQuery, uuid);
@@ -161,13 +170,13 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
             assertThat(row.getString(1)).isEqualTo("John Doe");
             assertThat(row.getObject(1)).isEqualTo("John Doe");
             assertThat(row.get(1, String.class)).isEqualTo("John Doe");
-            assertThat(row.getTupleValue(2)).isEqualTo(locationType.newValue(37.387224f, null));
+            assertThat(row.getTupleValue(2)).isEqualTo(locationType.newValue(protocolVersion, codecRegistry).bind(37.387224f, null));
             // corner case: getObject should use default codecs;
             // but tuple and udt codecs are registered on the fly;
             // so if we have another manually-registered codec
             // that one will be picked up :(
             assertThat(row.getObject(2)).isEqualTo(partialLocation);
-            assertThat(row.get(2, TupleValue.class)).isEqualTo(locationType.newValue(37.387224f, null));
+            assertThat(row.get(2, TupleValue.class)).isEqualTo(locationType.newValue(protocolVersion, codecRegistry).bind(37.387224f, null));
             assertThat(row.get(2, Location.class)).isEqualTo(partialLocation);
         } finally {
             cluster.close();
@@ -199,19 +208,19 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
     }
 
     private void setUpTupleTypes(Cluster cluster) {
-        locationType = cluster.getMetadata().newTupleType(cfloat(), cfloat());
-        locationValue = locationType.newValue()
+        locationType = TupleType.of(cfloat(), cfloat());
+        locationValue = locationType.newValue(protocolVersion, codecRegistry)
             .setFloat(0, 37.387224f)
             .setFloat(1, -121.9733837f);
         // insert a tuple of a different dimension
-        partialLocationValueInserted = cluster.getMetadata().newTupleType(cfloat()).newValue().setFloat(0, 37.387224f);
+        partialLocationValueInserted = TupleType.of(cfloat()).newValue(protocolVersion, codecRegistry).setFloat(0, 37.387224f);
         // retrieve the partial tuple with null missing values
-        partialLocationValueRetrieved = locationType.newValue(37.387224f, null);
+        partialLocationValueRetrieved = locationType.newValue(protocolVersion, codecRegistry).bind(37.387224f, null);
         location = new Location(37.387224f, -121.9733837f);
         partialLocation = new Location(37.387224f, 0.0f);
     }
 
-    static class LocationCodec extends TypeCodec.MappingCodec<Location, TupleValue> {
+    class LocationCodec extends TypeCodec.MappingCodec<Location, TupleValue> {
 
         private final TupleType tupleType;
 
@@ -227,7 +236,7 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
 
         @Override
         protected TupleValue serialize(Location value) {
-            return value == null ? null : tupleType.newValue().setFloat(0, value.latitude).setFloat(1, value.longitude);
+            return value == null ? null : tupleType.newValue(protocolVersion, codecRegistry).setFloat(0, value.latitude).setFloat(1, value.longitude);
         }
     }
 
@@ -251,9 +260,7 @@ public class TypeCodecTupleIntegrationTest extends CCMBridge.PerClassSingleNodeC
 
             Location location = (Location)o;
 
-            if (Float.compare(location.latitude, latitude) != 0)
-                return false;
-            return Float.compare(location.longitude, longitude) == 0;
+            return Float.compare(location.latitude, latitude) == 0 && Float.compare(location.longitude, longitude) == 0;
 
         }
 

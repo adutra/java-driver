@@ -15,23 +15,29 @@
  */
 package com.datastax.driver.core;
 
-import com.datastax.driver.core.utils.CassandraVersion;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.joda.time.LocalTime;
-import org.testng.annotations.Test;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalTime;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-import static com.datastax.driver.core.DataType.*;
+import com.datastax.driver.core.utils.CassandraVersion;
+
+import static com.datastax.driver.core.DataType.timestamp;
+import static com.datastax.driver.core.DataType.varchar;
 
 @CassandraVersion(major=2.2)
 public class TypeCodecJodaIntegrationTest extends CCMBridge.PerClassSingleNodeCluster {
+
+    private CodecRegistry codecRegistry;
+
     @Override
     protected Collection<String> getTableDefinitions() {
         return Collections.singletonList(
@@ -44,6 +50,11 @@ public class TypeCodecJodaIntegrationTest extends CCMBridge.PerClassSingleNodeCl
     @Override
     protected Cluster.Builder configure(Cluster.Builder builder) {
         return builder.withCodecRegistry(JodaCodecs.withCodecs(new CodecRegistry()));
+    }
+
+    @BeforeMethod(groups = "short")
+    public void setUp() throws Exception {
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
     }
 
     /**
@@ -150,8 +161,9 @@ public class TypeCodecJodaIntegrationTest extends CCMBridge.PerClassSingleNodeCl
     @Test(groups="short")
     public void should_map_tuple_to_datetime() {
         // Register codec that maps DateTime <-> tuple<timestamp,varchar>
-        TupleType dateWithTimeZoneType = cluster.getMetadata().newTupleType(timestamp(), varchar());
-        JodaCodecs.TimeZonePreservingDateTimeCodec dateTimeCodec = new JodaCodecs.TimeZonePreservingDateTimeCodec(new TypeCodec.TupleCodec(dateWithTimeZoneType));
+        TupleType dateWithTimeZoneType = TupleType.of(timestamp(), varchar());
+        TypeCodec.TupleCodec tupleCodec = new TypeCodec.TupleCodec(dateWithTimeZoneType, codecRegistry);
+        JodaCodecs.TimeZonePreservingDateTimeCodec dateTimeCodec = new JodaCodecs.TimeZonePreservingDateTimeCodec(tupleCodec, codecRegistry);
         cluster.getConfiguration().getCodecRegistry().register(dateTimeCodec);
 
         DateTime dateTime = DateTime.parse("2010-06-30T01:20+05:30");

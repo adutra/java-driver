@@ -15,6 +15,10 @@
  */
 package com.datastax.driver.core;
 
+import java.util.List;
+
+import com.datastax.driver.core.exceptions.InvalidTypeException;
+
 /**
  * A value for a Tuple.
  */
@@ -22,14 +26,17 @@ public class TupleValue extends AbstractAddressableByIndexData<TupleValue> {
 
     private final TupleType type;
 
+    private final CodecRegistry codecRegistry;
+
     /**
      * Builds a new value for a tuple.
      *
      * @param type the {@link TupleType} instance defining this tuple's components.
      */
-    TupleValue(TupleType type) {
-        super(type.getProtocolVersion(), type.getComponentTypes().size());
+    TupleValue(TupleType type, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        super(protocolVersion, type.getComponentTypes().size());
         this.type = type;
+        this.codecRegistry = codecRegistry;
     }
 
     protected DataType getType(int i) {
@@ -44,7 +51,7 @@ public class TupleValue extends AbstractAddressableByIndexData<TupleValue> {
 
     @Override
     protected CodecRegistry getCodecRegistry() {
-        return type.getCodecRegistry();
+        return codecRegistry;
     }
 
     /**
@@ -54,6 +61,33 @@ public class TupleValue extends AbstractAddressableByIndexData<TupleValue> {
      */
     public TupleType getType() {
         return type;
+    }
+
+    /**
+     * This is a convenience method to set all the values of this
+     * {@code TupleValue} in one call.
+     *
+     * @param values the values to use for the component of the resulting
+     * tuple.
+     * @throws IllegalArgumentException if the number of {@code values}
+     * provided does not correspond to the number of components in this tuple
+     * type.
+     * @throws InvalidTypeException if any of the provided value is not of
+     * the correct type for the component.
+     */
+    public TupleValue bind(Object... values) {
+        List<DataType> types = type.getComponentTypes();
+        if (values.length != types.size())
+            throw new IllegalArgumentException(String.format("Invalid number of values. Expecting %d but got %d", types.size(), values.length));
+
+        for (int i = 0; i < values.length; i++) {
+            DataType dataType = types.get(i);
+            if(values[i] == null)
+                setValue(i, null);
+            else
+                setValue(i, codecRegistry.codecFor(dataType, values[i]).serialize(values[i], protocolVersion));
+        }
+        return this;
     }
 
     @Override

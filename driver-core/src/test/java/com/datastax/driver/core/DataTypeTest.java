@@ -227,19 +227,19 @@ public class DataTypeTest {
 
         String toParse = "{t:'fo''o',i:3,l:['a','b'],s:{3:{a:0x01}}}";
 
-        final UserType udt1 = new UserType("ks", "t", Arrays.asList(new UserType.Field("a", DataType.blob())), protocolVersion, codecRegistry);
+        final UserType udt1 = new UserType("ks", "t", Arrays.asList(new UserType.Field("a", DataType.blob())));
         UserType udt2 = new UserType("ks", "t", Arrays.asList(
             new UserType.Field("t", DataType.text()),
             new UserType.Field("i", DataType.cint()),
             new UserType.Field("l", DataType.list(DataType.text())),
             new UserType.Field("s", DataType.map(DataType.cint(), udt1))
-        ), protocolVersion, codecRegistry);
+        ));
 
-        UDTValue toFormat = udt2.newValue();
+        UDTValue toFormat = udt2.newValue(protocolVersion, codecRegistry);
         toFormat.setString("t", "fo'o");
         toFormat.setInt("i", 3);
         toFormat.setList("l", Arrays.<String>asList("a", "b"));
-        toFormat.setMap("s", new HashMap<Integer, UDTValue>(){{ put(3, udt1.newValue().setBytes("a", ByteBuffer.wrap(new byte[]{1}))); }});
+        toFormat.setMap("s", new HashMap<Integer, UDTValue>(){{ put(3, udt1.newValue(protocolVersion, codecRegistry).setBytes("a", ByteBuffer.wrap(new byte[]{1}))); }});
 
         assertEquals(codecRegistry.codecFor(udt2).parse(toParse), toFormat);
         assertEquals(codecRegistry.codecFor(udt2).format(toFormat), toParse);
@@ -250,8 +250,8 @@ public class DataTypeTest {
     public void parseFormatTupleTest() {
 
         String toParse = "(1, 'foo', 1.0)";
-        TupleType t = new TupleType(newArrayList(DataType.cint(), DataType.text(), DataType.cfloat()), protocolVersion, codecRegistry);
-        TupleValue toFormat = t.newValue(1, "foo", 1.0f);
+        TupleType t = new TupleType(newArrayList(DataType.cint(), DataType.text(), DataType.cfloat()));
+        TupleValue toFormat = t.newValue(protocolVersion, codecRegistry).bind(1, "foo", 1.0f);
 
         assertEquals(codecRegistry.codecFor(t).parse(toParse), toFormat);
         assertEquals(codecRegistry.codecFor(t).format(toFormat), toParse);

@@ -15,18 +15,18 @@
  */
 package com.datastax.driver.core;
 
-import com.google.common.base.Joiner;
-
 /**
  * A value for a User Defined Type.
  */
 public class UDTValue extends AbstractData<UDTValue> {
 
     private final UserType definition;
+    private final CodecRegistry codecRegistry;
 
-    UDTValue(UserType definition) {
-        super(definition.getProtocolVersion(), definition.size());
+    UDTValue(UserType definition, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        super(protocolVersion, definition.size());
         this.definition = definition;
+        this.codecRegistry = codecRegistry;
     }
 
     protected DataType getType(int i) {
@@ -39,7 +39,7 @@ public class UDTValue extends AbstractData<UDTValue> {
 
     @Override
     protected CodecRegistry getCodecRegistry() {
-        return definition.getCodecRegistry();
+        return codecRegistry;
     }
 
     protected int[] getAllIndexesOf(String name) {

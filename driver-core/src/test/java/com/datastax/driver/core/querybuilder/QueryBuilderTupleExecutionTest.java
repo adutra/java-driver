@@ -20,14 +20,13 @@ import java.util.Collections;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.testng.Assert.assertEquals;
 
-import com.datastax.driver.core.CCMBridge;
-import com.datastax.driver.core.TupleType;
-import com.datastax.driver.core.TupleValue;
+import com.datastax.driver.core.*;
 import com.datastax.driver.core.utils.CassandraVersion;
 
 import static com.datastax.driver.core.DataType.cint;
@@ -37,16 +36,25 @@ import static com.datastax.driver.core.querybuilder.QueryBuilder.set;
 @CassandraVersion(major=2.1, minor=3)
 public class QueryBuilderTupleExecutionTest extends CCMBridge.PerClassSingleNodeCluster {
 
+    private ProtocolVersion protocolVersion;
+    private CodecRegistry codecRegistry;
+
     @Override
     protected Collection<String> getTableDefinitions() {
             return Collections.emptyList();
     }
 
+    @BeforeMethod
+    public void setUp() throws Exception {
+        protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
+    }
+
     @Test(groups = "short")
     public void should_handle_tuple() throws Exception {
         String query = "INSERT INTO foo(k,x) VALUES (0,(1));";
-        TupleType tupleType = cluster.getMetadata().newTupleType(cint());
-        BuiltStatement insert = new QueryBuilder(cluster).insertInto("foo").value("k", 0).value("x", tupleType.newValue(1));
+        TupleType tupleType = TupleType.of(cint());
+        BuiltStatement insert = new QueryBuilder(cluster).insertInto("foo").value("k", 0).value("x", tupleType.newValue(protocolVersion, codecRegistry).setInt(0, 1));
         assertEquals(insert.toString(), query);
     }
 
@@ -56,8 +64,8 @@ public class QueryBuilderTupleExecutionTest extends CCMBridge.PerClassSingleNode
         String query;
         BuiltStatement statement;
         query = "UPDATE foo SET l=[(1, 2)] WHERE k=1;";
-        TupleType tupleType = cluster.getMetadata().newTupleType(cint(), cint());
-        List<TupleValue> list = ImmutableList.of(tupleType.newValue(1, 2));
+        TupleType tupleType = TupleType.of(cint(), cint());
+        List<TupleValue> list = ImmutableList.of(tupleType.newValue(protocolVersion, codecRegistry).setInt(0, 1).setInt(1, 2));
         statement = new QueryBuilder(cluster).update("foo").with(set("l", list)).where(eq("k", 1));
         assertThat(statement.toString()).isEqualTo(query);
     }

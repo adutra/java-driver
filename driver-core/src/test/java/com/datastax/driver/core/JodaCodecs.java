@@ -15,13 +15,13 @@
  */
 package com.datastax.driver.core;
 
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.joda.time.LocalTime;
-
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalTime;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -161,9 +161,11 @@ public class JodaCodecs {
     public static class TimeZonePreservingDateTimeCodec extends TypeCodec.MappingCodec<DateTime, TupleValue> {
 
         private final TupleType tupleType;
+        private final CodecRegistry codecRegistry;
 
-        public TimeZonePreservingDateTimeCodec(TypeCodec<TupleValue> innerCodec) {
+        public TimeZonePreservingDateTimeCodec(TypeCodec<TupleValue> innerCodec, CodecRegistry codecRegistry) {
             super(innerCodec, DateTime.class);
+            this.codecRegistry = codecRegistry;
             tupleType = (TupleType)innerCodec.getCqlType();
             List<DataType> types = tupleType.getComponentTypes();
             checkArgument(
@@ -181,7 +183,7 @@ public class JodaCodecs {
 
         @Override
         protected TupleValue serialize(DateTime value) {
-            TupleValue tupleValue = new TupleValue(tupleType);
+            TupleValue tupleValue = tupleType.newValue(ProtocolVersion.V3, codecRegistry);
             tupleValue.setTimestamp(0, value.toDate());
             tupleValue.setString(1, value.getZone().getID());
             return tupleValue;

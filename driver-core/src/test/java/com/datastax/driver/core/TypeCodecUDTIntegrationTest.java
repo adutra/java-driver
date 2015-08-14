@@ -19,6 +19,7 @@ import java.util.*;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,9 +38,6 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
     private final Phone phone2 = new Phone("2345678", Sets.newHashSet("work"));
     private final Address address = new Address("blah", 75010, Lists.newArrayList(phone1, phone2));
 
-    private UserType addressType;
-    private UserType phoneType;
-
     private UDTValue addressValue;
 
     @Override
@@ -51,9 +49,32 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
         );
     }
 
+    @BeforeMethod(groups = "short")
+    public void setUp() throws Exception {
+        ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();
+        UserType addressType = cluster.getMetadata().getKeyspace(keyspace).getUserType("address");
+        UserType phoneType = cluster.getMetadata().getKeyspace(keyspace).getUserType("phone");
+        UDTValue phone1Value = phoneType.newValue(protocolVersion, codecRegistry)
+            .setString("number", phone1.number)
+            .setSet("tags", phone1.tags);
+        UDTValue phone2Value = phoneType.newValue(protocolVersion, codecRegistry)
+            .setString("number", phone2.number)
+            .setObject("tags", phone2.tags);
+        addressValue = addressType.newValue(protocolVersion, codecRegistry)
+            .setString("street", address.street)
+            .setInt(1, address.zipcode)
+            .setList("phones", Lists.newArrayList(phone1Value, phone2Value));
+        TypeCodec<UDTValue> addressTypeCodec = new TypeCodec.UDTCodec(addressType, codecRegistry);
+        TypeCodec<UDTValue> phoneTypeCodec = new TypeCodec.UDTCodec(phoneType, codecRegistry);
+        codecRegistry
+            .register(new AddressCodec(addressTypeCodec, Address.class, codecRegistry))
+            .register(new PhoneCodec(phoneTypeCodec, Phone.class, codecRegistry))
+        ;
+    }
+
     @Test(groups = "short")
     public void should_handle_udts_with_default_codecs() {
-        setUpUserTypes(cluster);
         // simple statement
         session.execute(insertQuery, uuid, "John Doe", addressValue);
         ResultSet rows = session.execute(selectQuery, uuid);
@@ -70,8 +91,13 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
         rows = session.execute(selectQuery, uuid);
         row = rows.one();
         assertRow(row);
-        // bound with setObject
+        // bound with setObject + UDTValue
         session.execute(ps.bind().setUUID(0, uuid).setString(1, "John Doe").setObject(2, addressValue));
+        rows = session.execute(selectQuery, uuid);
+        row = rows.one();
+        assertRow(row);
+        // bound with set + UDTValue
+        session.execute(ps.bind().setUUID(0, uuid).setString(1, "John Doe").set(2, addressValue, UDTValue.class));
         rows = session.execute(selectQuery, uuid);
         row = rows.one();
         assertRow(row);
@@ -79,41 +105,27 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
 
     @Test(groups = "short")
     public void should_handle_udts_with_custom_codecs() {
-        CodecRegistry codecRegistry = new CodecRegistry();
-        Cluster cluster = Cluster.builder()
-            .addContactPointsWithPorts(Collections.singleton(hostAddress))
-            .withCodecRegistry(codecRegistry)
-            .build();
-
-        try {
-            Session session = cluster.connect(keyspace);
-            setUpUserTypes(cluster);
-            TypeCodec<UDTValue> addressTypeCodec = new TypeCodec.UDTCodec(addressType);
-            TypeCodec<UDTValue> phoneTypeCodec = new TypeCodec.UDTCodec(phoneType);
-            codecRegistry
-                .register(new AddressCodec(addressTypeCodec, Address.class))
-                .register(new PhoneCodec(phoneTypeCodec, Phone.class))
-            ;
-            session.execute(insertQuery, uuid, "John Doe", address);
-            ResultSet rows = session.execute(selectQuery, uuid);
-            Row row = rows.one();
-            assertThat(row.getUUID(0)).isEqualTo(uuid);
-            assertThat(row.getObject(0)).isEqualTo(uuid);
-            assertThat(row.get(0, UUID.class)).isEqualTo(uuid);
-            assertThat(row.getString(1)).isEqualTo("John Doe");
-            assertThat(row.getObject(1)).isEqualTo("John Doe");
-            assertThat(row.get(1, String.class)).isEqualTo("John Doe");
-            assertThat(row.getUDTValue(2)).isEqualTo(addressValue);
-            // corner case: getObject should use default codecs;
-            // but tuple and udt codecs are registered on the fly;
-            // so if we have another manually-registered codec
-            // that one will be picked up :(
-            assertThat(row.getObject(2)).isEqualTo(address);
-            assertThat(row.get(2, UDTValue.class)).isEqualTo(addressValue);
-            assertThat(row.get(2, Address.class)).isEqualTo(address);
-        } finally {
-            cluster.close();
-        }
+        // simple statement
+        session.execute(insertQuery, uuid, "John Doe", address);
+        ResultSet rows = session.execute(selectQuery, uuid);
+        Row row = rows.one();
+        assertRow(row);
+        // prepared + values
+        PreparedStatement ps = session.prepare(insertQuery);
+        session.execute(ps.bind(uuid, "John Doe", address));
+        rows = session.execute(selectQuery, uuid);
+        row = rows.one();
+        assertRow(row);
+        // bound with setObject + Address type
+        session.execute(ps.bind().setUUID(0, uuid).setString(1, "John Doe").setObject(2, address));
+        rows = session.execute(selectQuery, uuid);
+        row = rows.one();
+        assertRow(row);
+        // bound with set + Address type
+        session.execute(ps.bind().setUUID(0, uuid).setString(1, "John Doe").set(2, address, Address.class));
+        rows = session.execute(selectQuery, uuid);
+        row = rows.one();
+        assertRow(row);
     }
 
     private void assertRow(Row row) {
@@ -124,32 +136,25 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
         assertThat(row.getObject(1)).isEqualTo("John Doe");
         assertThat(row.get(1, String.class)).isEqualTo("John Doe");
         assertThat(row.getUDTValue(2)).isEqualTo(addressValue);
-        assertThat(row.getObject(2)).isEqualTo(addressValue);
+        // corner case: getObject normally would use default codecs;
+        // but tuple and udt codecs are registered on the fly
+        // so if the user has manually registered a codec
+        // for a specific tuple or udt, that one will be picked
+        assertThat(row.getObject(2)).isEqualTo(address);
         assertThat(row.get(2, UDTValue.class)).isEqualTo(addressValue);
-    }
-
-    private void setUpUserTypes(Cluster cluster) {
-        addressType = cluster.getMetadata().getKeyspace(keyspace).getUserType("address");
-        phoneType = cluster.getMetadata().getKeyspace(keyspace).getUserType("phone");
-        UDTValue phone1Value = phoneType.newValue()
-            .setString("number", phone1.number)
-            .setSet("tags", phone1.tags);
-        UDTValue phone2Value = phoneType.newValue()
-            .setString("number", phone2.number)
-            .setObject("tags", phone2.tags);
-        addressValue = addressType.newValue()
-            .setString("street", address.street)
-            .setInt(1, address.zipcode)
-            .setList("phones", Lists.newArrayList(phone1Value, phone2Value));
+        assertThat(row.get(2, Address.class)).isEqualTo(address);
     }
 
     static class AddressCodec extends TypeCodec.MappingCodec<Address, UDTValue> {
 
-        private final UserType userType;
+        private final UserType addressType;
 
-        public AddressCodec(TypeCodec<UDTValue> innerCodec, Class<Address> javaType) {
+        private final CodecRegistry codecRegistry;
+
+        public AddressCodec(TypeCodec<UDTValue> innerCodec, Class<Address> javaType, CodecRegistry codecRegistry) {
             super(innerCodec, javaType);
-            userType = (UserType) innerCodec.getCqlType();
+            addressType = (UserType) innerCodec.getCqlType();
+            this.codecRegistry = codecRegistry;
         }
 
         @Override
@@ -159,17 +164,20 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
 
         @Override
         protected UDTValue serialize(Address value) {
-            return value == null ? null : userType.newValue().setString("street", value.street).setInt("zipcode", value.zipcode).setList("phones", value.phones);
+            return value == null ? null : addressType.newValue(ProtocolVersion.NEWEST_SUPPORTED, codecRegistry).setString("street", value.street).setInt("zipcode", value.zipcode).setList("phones", value.phones);
         }
     }
 
     static class PhoneCodec extends TypeCodec.MappingCodec<Phone, UDTValue> {
 
-        private final UserType userType;
+        private final UserType phoneType;
 
-        public PhoneCodec(TypeCodec<UDTValue> innerCodec, Class<Phone> javaType) {
+        private final CodecRegistry codecRegistry;
+
+        public PhoneCodec(TypeCodec<UDTValue> innerCodec, Class<Phone> javaType, CodecRegistry codecRegistry) {
             super(innerCodec, javaType);
-            userType = (UserType) innerCodec.getCqlType();
+            this.codecRegistry = codecRegistry;
+            phoneType = (UserType) innerCodec.getCqlType();
         }
 
         @Override
@@ -179,7 +187,7 @@ public class TypeCodecUDTIntegrationTest extends CCMBridge.PerClassSingleNodeClu
 
         @Override
         protected UDTValue serialize(Phone value) {
-            return value == null ? null : userType.newValue().setString("number", value.number).setSet("tags", value.tags);
+            return value == null ? null : phoneType.newValue(ProtocolVersion.NEWEST_SUPPORTED, codecRegistry).setString("number", value.number).setSet("tags", value.tags);
         }
     }
 

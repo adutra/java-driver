@@ -33,9 +33,6 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
 
     private final String keyspace;
     private final String typeName;
-    private final ProtocolVersion protocolVersion;
-
-    private volatile CodecRegistry codecRegistry;
 
     // Note that we don't expose the order of fields, from an API perspective this is a map
     // of String->Field, but internally we care about the order because the serialization format
@@ -46,14 +43,11 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
     // implementation.
     final Map<String, int[]> byName;
 
-    UserType(String keyspace, String typeName, Collection<Field> fields, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    UserType(String keyspace, String typeName, Collection<Field> fields) {
         super(DataType.Name.UDT);
+
         this.keyspace = keyspace;
         this.typeName = typeName;
-        this.protocolVersion = protocolVersion;
-        // codecRegistry can be null, if this object is being constructed from a response message
-        // see Responses.Result.Rows.Metadata.decode()
-        this.codecRegistry = codecRegistry;
         this.byIdx = fields.toArray(new Field[fields.size()]);
 
         ImmutableMap.Builder<String, int[]> builder = new ImmutableMap.Builder<String, int[]>();
@@ -62,7 +56,7 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
         this.byName = builder.build();
     }
 
-    static UserType build(Row row, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    static UserType build(Row row) {
         String keyspace = row.getString(KeyspaceMetadata.KS_NAME);
         String name = row.getString(TYPE_NAME);
 
@@ -71,9 +65,9 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
 
         List<Field> fields = new ArrayList<Field>(fieldNames.size());
         for (int i = 0; i < fieldNames.size(); i++)
-            fields.add(new Field(fieldNames.get(i), CassandraTypeParser.parseOne(fieldTypes.get(i), protocolVersion, codecRegistry)));
+            fields.add(new Field(fieldNames.get(i), CassandraTypeParser.parseOne(fieldTypes.get(i))));
 
-        return new UserType(keyspace, name, fields, protocolVersion, codecRegistry);
+        return new UserType(keyspace, name, fields);
     }
 
     /**
@@ -81,8 +75,8 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
      *
      * @return an empty value for this user type definition.
      */
-    public UDTValue newValue() {
-        return new UDTValue(this);
+    public UDTValue newValue(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        return new UDTValue(this, protocolVersion, codecRegistry);
     }
 
     /**
@@ -214,29 +208,6 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
      */
     public String asCQLQuery() {
         return asCQLQuery(false);
-    }
-
-    /**
-     * Return the protocol version that has been used to deserialize
-     * this UDT, or that will be used to serialize it.
-     * In most cases this should be the version
-     * currently in use by the cluster instance
-     * that this UDT belongs to, as reported by
-     * {@link ProtocolOptions#getProtocolVersion()}.
-     *
-     * @return the protocol version that has been used to deserialize
-     * this UDT, or that will be used to serialize it.
-     */
-    ProtocolVersion getProtocolVersion() {
-        return protocolVersion;
-    }
-
-    CodecRegistry getCodecRegistry() {
-        return codecRegistry;
-    }
-
-    void setCodecRegistry(CodecRegistry codecRegistry) {
-        this.codecRegistry = codecRegistry;
     }
 
     private String asCQLQuery(boolean formatted) {

@@ -73,12 +73,12 @@ public class AggregateMetadata {
         String simpleName = row.getString("aggregate_name");
         List<String> signature = row.getList("signature", String.class);
         String fullName = Metadata.fullFunctionName(simpleName, signature);
-        List<DataType> argumentTypes = parseTypes(row.getList("argument_types", String.class), protocolVersion, codecRegistry);
+        List<DataType> argumentTypes = parseTypes(row.getList("argument_types", String.class));
         String finalFuncSimpleName = row.getString("final_func");
-        DataType returnType = CassandraTypeParser.parseOne(row.getString("return_type"), protocolVersion, codecRegistry);
+        DataType returnType = CassandraTypeParser.parseOne(row.getString("return_type"));
         String stateFuncSimpleName = row.getString("state_func");
         String stateTypeName = row.getString("state_type");
-        DataType stateType = CassandraTypeParser.parseOne(stateTypeName, protocolVersion, codecRegistry);
+        DataType stateType = CassandraTypeParser.parseOne(stateTypeName);
         ByteBuffer rawInitCond = row.getBytes("initcond");
         Object initCond = rawInitCond == null ? null : codecRegistry.codecFor(stateType).deserialize(rawInitCond, protocolVersion);
 
@@ -98,13 +98,13 @@ public class AggregateMetadata {
         return Metadata.fullFunctionName(stateFuncSimpleName, args);
     }
 
-    private static List<DataType> parseTypes(List<String> names, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    private static List<DataType> parseTypes(List<String> names) {
         if (names.isEmpty())
             return Collections.emptyList();
 
         ImmutableList.Builder<DataType> builder = ImmutableList.builder();
         for (String name : names) {
-            DataType type = CassandraTypeParser.parseOne(name, protocolVersion, codecRegistry);
+            DataType type = CassandraTypeParser.parseOne(name);
             builder.add(type);
         }
         return builder.build();

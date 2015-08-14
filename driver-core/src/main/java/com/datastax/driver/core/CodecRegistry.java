@@ -568,11 +568,11 @@ public final class CodecRegistry {
         }
 
         if (cqlType instanceof TupleType && (javaType == null || TupleValue.class.isAssignableFrom(javaType.getRawType()))) {
-            return (TypeCodec<T>)new TupleCodec((TupleType)cqlType);
+            return (TypeCodec<T>)new TupleCodec((TupleType)cqlType, this);
         }
 
         if (cqlType instanceof UserType && (javaType == null || UDTValue.class.isAssignableFrom(javaType.getRawType()))) {
-            return (TypeCodec<T>)new UDTCodec((UserType)cqlType);
+            return (TypeCodec<T>)new UDTCodec((UserType)cqlType, this);
         }
 
         return null;
@@ -643,11 +643,11 @@ public final class CodecRegistry {
         }
 
         if ((cqlType == null || cqlType.getName() == DataType.Name.TUPLE) && value instanceof TupleValue) {
-            return (TypeCodec<T>)new TupleCodec(cqlType == null ? ((TupleValue)value).getType() : (TupleType) cqlType);
+            return (TypeCodec<T>)new TupleCodec(cqlType == null ? ((TupleValue)value).getType() : (TupleType) cqlType, this);
         }
 
         if ((cqlType == null || cqlType.getName() == DataType.Name.UDT) && value instanceof UDTValue) {
-            return (TypeCodec<T>)new UDTCodec(cqlType == null ? ((UDTValue)value).getType() : (UserType) cqlType);
+            return (TypeCodec<T>)new UDTCodec(cqlType == null ? ((UDTValue)value).getType() : (UserType) cqlType, this);
         }
 
         return null;

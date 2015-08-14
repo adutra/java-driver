@@ -38,7 +38,6 @@ import com.datastax.driver.core.exceptions.InvalidTypeException;
 import static com.datastax.driver.core.Assertions.assertThat;
 import static com.datastax.driver.core.CodecUtils.listOf;
 import static com.datastax.driver.core.DataType.*;
-import static com.datastax.driver.core.ProtocolVersion.V3;
 
 public class TypeCodecTest {
 
@@ -157,19 +156,19 @@ public class TypeCodecTest {
             .accepts(map(varchar(), text()))
             .accepts(map(text(), varchar()))
             .accepts(map(text(), text()));
-        TupleType t1 = new TupleType(newArrayList(varchar(), varchar()), V3, new CodecRegistry());
-        TupleType t2 = new TupleType(newArrayList(text(), varchar()), V3, new CodecRegistry());
-        TupleType t3 = new TupleType(newArrayList(varchar(), text()), V3, new CodecRegistry());
-        TupleType t4 = new TupleType(newArrayList(text(), text()), V3, new CodecRegistry());
-        assertThat(new TypeCodec.TupleCodec(t1))
+        TupleType t1 = new TupleType(newArrayList(varchar(), varchar()));
+        TupleType t2 = new TupleType(newArrayList(text(), varchar()));
+        TupleType t3 = new TupleType(newArrayList(varchar(), text()));
+        TupleType t4 = new TupleType(newArrayList(text(), text()));
+        assertThat(new TypeCodec.TupleCodec(t1, codecRegistry))
             .accepts(t2)
             .accepts(t3)
             .accepts(t4);
-        UserType u1 = new UserType("ks", "table", newArrayList(new Field("f1", varchar()), new Field("f2", varchar())), V3, new CodecRegistry());
-        UserType u2 = new UserType("ks", "table", newArrayList(new Field("f1", text()), new Field("f2", varchar())), V3, new CodecRegistry());
-        UserType u3 = new UserType("ks", "table", newArrayList(new Field("f1", varchar()), new Field("f2", text())), V3, new CodecRegistry());
-        UserType u4 = new UserType("ks", "table", newArrayList(new Field("f1", text()), new Field("f2", text())), V3, new CodecRegistry());
-        assertThat(new TypeCodec.UDTCodec(u1))
+        UserType u1 = new UserType("ks", "table", newArrayList(new Field("f1", varchar()), new Field("f2", varchar())));
+        UserType u2 = new UserType("ks", "table", newArrayList(new Field("f1", text()), new Field("f2", varchar())));
+        UserType u3 = new UserType("ks", "table", newArrayList(new Field("f1", varchar()), new Field("f2", text())));
+        UserType u4 = new UserType("ks", "table", newArrayList(new Field("f1", text()), new Field("f2", text())));
+        assertThat(new TypeCodec.UDTCodec(u1, codecRegistry))
             .accepts(u2)
             .accepts(u3)
             .accepts(u4);

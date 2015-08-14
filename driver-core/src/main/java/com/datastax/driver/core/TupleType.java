@@ -20,8 +20,6 @@ import java.util.List;
 
 import com.google.common.collect.ImmutableList;
 
-import com.datastax.driver.core.exceptions.InvalidTypeException;
-
 /**
  * A tuple type.
  * <p>
@@ -30,14 +28,20 @@ import com.datastax.driver.core.exceptions.InvalidTypeException;
 public class TupleType extends DataType {
 
     private final List<DataType> types;
-    private final ProtocolVersion protocolVersion;
-    private volatile CodecRegistry codecRegistry;
 
-    TupleType(List<DataType> types, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    TupleType(List<DataType> types) {
         super(DataType.Name.TUPLE);
         this.types = ImmutableList.copyOf(types);
-        this.protocolVersion = protocolVersion;
-        this.codecRegistry = codecRegistry;
+    }
+
+    /**
+     * Creates a tuple type given a list of types.
+     *
+     * @param types the types for the tuple type.
+     * @return the newly created tuple type.
+     */
+    public static TupleType of(DataType... types) {
+        return new TupleType(Arrays.asList(types));
     }
 
     /**
@@ -52,75 +56,19 @@ public class TupleType extends DataType {
     /**
      * Returns a new empty value for this tuple type.
      *
+     * @param protocolVersion The protocol version to use.
+     * @param codecRegistry The {@link CodecRegistry} instance to use.
      * @return an empty (with all component to {@code null}) value for this
-     * user type definition.
+     * tuple definition.
      */
-    public TupleValue newValue() {
-        return new TupleValue(this);
-    }
-
-    /**
-     * Returns a new value for this tuple type that uses the provided values
-     * for the components.
-     * <p>
-     * The numbers of values passed to this method must correspond to the
-     * number of components in this tuple type. The {@code i}th parameter
-     * value will then be assigned to the {@code i}th component of the resulting
-     * tuple value.
-     *
-     * @param values the values to use for the component of the resulting
-     * tuple.
-     * @return a new tuple values based on the provided values.
-     *
-     * @throws IllegalArgumentException if the number of {@code values}
-     * provided does not correspond to the number of components in this tuple
-     * type.
-     * @throws InvalidTypeException if any of the provided value is not of
-     * the correct type for the component.
-     */
-    public TupleValue newValue(Object... values) {
-        if (values.length != types.size())
-            throw new IllegalArgumentException(String.format("Invalid number of values. Expecting %d but got %d", types.size(), values.length));
-
-        TupleValue t = newValue();
-        for (int i = 0; i < values.length; i++) {
-            DataType dataType = types.get(i);
-            if(values[i] == null)
-                t.setValue(i, null);
-            else
-                t.setValue(i, codecRegistry.codecFor(dataType, values[i]).serialize(values[i], protocolVersion));
-        }
-        return t;
+    public TupleValue newValue(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        return new TupleValue(this, protocolVersion, codecRegistry);
     }
 
     @Override
     public boolean isFrozen() {
         return true;
     }
-
-    /**
-     * Return the protocol version that has been used to deserialize
-     * this tuple type, or that will be used to serialize it.
-     * In most cases this should be the version
-     * currently in use by the cluster instance
-     * that this tuple type belongs to, as reported by
-     * {@link ProtocolOptions#getProtocolVersion()}.
-     *
-     * @return the protocol version that has been used to deserialize
-     * this tuple type, or that will be used to serialize it.
-     */
-    ProtocolVersion getProtocolVersion() {
-        return protocolVersion;
-    }
-
-    CodecRegistry getCodecRegistry() {
-        return codecRegistry;
-    }
-
-    void setCodecRegistry(CodecRegistry codecRegistry) {
-        this.codecRegistry = codecRegistry;
-    }
-
 
     @Override
     public int hashCode() {
@@ -171,5 +119,4 @@ public class TupleType extends DataType {
         }
         return sb.append(">>").toString();
     }
-
 }

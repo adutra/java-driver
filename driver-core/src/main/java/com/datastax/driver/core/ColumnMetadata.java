@@ -318,7 +318,7 @@ public class ColumnMetadata {
             this.isReversed = isReversed;
         }
 
-        static Raw fromRow(Row row, VersionNumber version, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        static Raw fromRow(Row row, VersionNumber version) {
 
             String name = row.getString(COLUMN_NAME);
             Kind kind = version.getMajor() < 2 || row.isNull(KIND)
@@ -327,7 +327,7 @@ public class ColumnMetadata {
             int componentIndex = row.isNull(COMPONENT_INDEX) ? 0 : row.getInt(COMPONENT_INDEX);
             String validatorStr = row.getString(VALIDATOR);
             boolean reversed = CassandraTypeParser.isReversed(validatorStr);
-            DataType dataType = CassandraTypeParser.parseOne(validatorStr, protocolVersion, codecRegistry);
+            DataType dataType = CassandraTypeParser.parseOne(validatorStr);
             Raw c = new Raw(name, kind, componentIndex, dataType, reversed);
 
             for (String str : Arrays.asList(INDEX_TYPE, INDEX_NAME, INDEX_OPTIONS))

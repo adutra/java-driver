@@ -155,21 +155,21 @@ public abstract class DataType {
         this.name = name;
     }
 
-    static DataType decode(ByteBuf buffer, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    static DataType decode(ByteBuf buffer) {
         Name name = Name.fromProtocolId(buffer.readUnsignedShort());
         switch (name) {
             case CUSTOM:
                 String className = CBUtil.readString(buffer);
                 return CassandraTypeParser.isUserType(className) || CassandraTypeParser.isTupleType(className)
-                     ? CassandraTypeParser.parseOne(className, protocolVersion, codecRegistry)
+                     ? CassandraTypeParser.parseOne(className)
                      : custom(className);
             case LIST:
-                return list(decode(buffer, protocolVersion, codecRegistry));
+                return list(decode(buffer));
             case SET:
-                return set(decode(buffer, protocolVersion, codecRegistry));
+                return set(decode(buffer));
             case MAP:
-                DataType keys = decode(buffer, protocolVersion, codecRegistry);
-                DataType values = decode(buffer, protocolVersion, codecRegistry);
+                DataType keys = decode(buffer);
+                DataType values = decode(buffer);
                 return map(keys, values);
             case UDT:
                 String keyspace = CBUtil.readString(buffer);
@@ -178,17 +178,17 @@ public abstract class DataType {
                 List<UserType.Field> fields = new ArrayList<UserType.Field>(nFields);
                 for (int i = 0; i < nFields; i++) {
                     String fieldName = CBUtil.readString(buffer);
-                    DataType fieldType = decode(buffer, protocolVersion, codecRegistry);
+                    DataType fieldType = decode(buffer);
                     fields.add(new UserType.Field(fieldName, fieldType));
                 }
-                return new UserType(keyspace, type, fields, protocolVersion, codecRegistry);
+                return new UserType(keyspace, type, fields);
             case TUPLE:
                 nFields = buffer.readShort() & 0xffff;
                 List<DataType> types = new ArrayList<DataType>(nFields);
                 for (int i = 0; i < nFields; i++) {
-                    types.add(decode(buffer, protocolVersion, codecRegistry));
+                    types.add(decode(buffer));
                 }
-                return new TupleType(types, protocolVersion, codecRegistry);
+                return new TupleType(types);
             default:
                 return primitiveTypeMap.get(name);
         }

@@ -29,8 +29,6 @@ import static com.datastax.driver.core.Assertions.assertThat;
 
 public class FunctionMetadataTest {
     KeyspaceMetadata keyspace;
-    private ProtocolVersion protocolVersion = TestUtils.getDesiredProtocolVersion();
-    private CodecRegistry codecRegistry = new CodecRegistry();
 
     @BeforeMethod(groups = "unit")
     public void setup() {
@@ -39,7 +37,7 @@ public class FunctionMetadataTest {
 
     @Test(groups = "unit")
     public void should_parse_and_format_simple_function() {
-        FunctionMetadata function = FunctionMetadata.build(keyspace, SYSTEM_ROW_PLUS, protocolVersion, codecRegistry);
+        FunctionMetadata function = FunctionMetadata.build(keyspace, SYSTEM_ROW_PLUS);
 
         assertThat(function).isNotNull();
         assertThat(function.getKeyspace()).isEqualTo(keyspace);
@@ -70,7 +68,7 @@ public class FunctionMetadataTest {
 
     @Test(groups = "unit")
     public void should_parse_and_format_function_with_no_arguments() {
-        FunctionMetadata function = FunctionMetadata.build(keyspace, SYSTEM_ROW_PI, protocolVersion, codecRegistry);
+        FunctionMetadata function = FunctionMetadata.build(keyspace, SYSTEM_ROW_PI);
 
         assertThat(function).isNotNull();
         assertThat(function.getKeyspace()).isEqualTo(keyspace);

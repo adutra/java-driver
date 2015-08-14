@@ -28,6 +28,7 @@ import com.google.common.base.Joiner;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
@@ -45,6 +46,8 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
     }
     private final static List<DataType.Name> DATA_TYPE_NON_PRIMITIVE_NAMES =
             new ArrayList<DataType.Name>(EnumSet.of(DataType.Name.LIST, DataType.Name.SET, DataType.Name.MAP, DataType.Name.TUPLE));
+    private ProtocolVersion protocolVersion;
+    private CodecRegistry codecRegistry;
 
     @Override
     protected Collection<String> getTableDefinitions() {
@@ -54,6 +57,12 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
         String table = "CREATE TABLE user (id int PRIMARY KEY, addr frozen<address>)";
 
         return Arrays.asList(type1, type2, table);
+    }
+
+    @BeforeMethod
+    public void setUp() throws Exception {
+        protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
     }
 
     /**
@@ -73,10 +82,10 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             UserType addrDef = cluster.getMetadata().getKeyspace(keyspace).getUserType("address");
             UserType phoneDef = cluster.getMetadata().getKeyspace(keyspace).getUserType("phone");
 
-            UDTValue phone1 = phoneDef.newValue().setString("alias", "home").setString("number", "0123548790");
-            UDTValue phone2 = phoneDef.newValue().setString("alias", "work").setString("number", "0698265251");
+            UDTValue phone1 = phoneDef.newValue(protocolVersion, codecRegistry).setString("alias", "home").setString("number", "0123548790");
+            UDTValue phone2 = phoneDef.newValue(protocolVersion, codecRegistry).setString("alias", "work").setString("number", "0698265251");
 
-            UDTValue addr = addrDef.newValue().setString("street", "1600 Pennsylvania Ave NW").setInt(quote("ZIP"), 20500).setSet("phones", ImmutableSet.of(phone1, phone2));
+            UDTValue addr = addrDef.newValue(protocolVersion, codecRegistry).setString("street", "1600 Pennsylvania Ave NW").setInt(quote("ZIP"), 20500).setSet("phones", ImmutableSet.of(phone1, phone2));
 
             session.execute(ins.bind(userId, addr));
 
@@ -103,10 +112,10 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             UserType addrDef = cluster.getMetadata().getKeyspace(keyspace).getUserType("address");
             UserType phoneDef = cluster.getMetadata().getKeyspace(keyspace).getUserType("phone");
 
-            UDTValue phone1 = phoneDef.newValue().setString("alias", "home").setString("number", "0123548790");
-            UDTValue phone2 = phoneDef.newValue().setString("alias", "work").setString("number", "0698265251");
+            UDTValue phone1 = phoneDef.newValue(protocolVersion, codecRegistry).setString("alias", "home").setString("number", "0123548790");
+            UDTValue phone2 = phoneDef.newValue(protocolVersion, codecRegistry).setString("alias", "work").setString("number", "0698265251");
 
-            UDTValue addr = addrDef.newValue().setString("street", "1600 Pennsylvania Ave NW").setInt(quote("ZIP"), 20500).setSet("phones", ImmutableSet.of(phone1, phone2));
+            UDTValue addr = addrDef.newValue(protocolVersion, codecRegistry).setString("street", "1600 Pennsylvania Ave NW").setInt(quote("ZIP"), 20500).setSet("phones", ImmutableSet.of(phone1, phone2));
 
             session.execute("INSERT INTO user(id, addr) VALUES (?, ?)", userId, addr);
 
@@ -197,7 +206,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             // verify inserts and reads
             for (int i : Arrays.asList(0, 1, 2, 3, MAX_TEST_LENGTH)) {
                 // create udt
-                UDTValue createdUDT = udtDef.newValue();
+                UDTValue createdUDT = udtDef.newValue(protocolVersion, codecRegistry);
                 for (int j = 0; j < i; ++j) {
                     createdUDT.setInt(j, j);
                 }
@@ -242,7 +251,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // insert UDT data
             UserType alldatatypesDef = cluster.getMetadata().getKeyspace("testPrimitiveDatatypes").getUserType("alldatatypes");
-            UDTValue alldatatypes = alldatatypesDef.newValue();
+            UDTValue alldatatypes = alldatatypesDef.newValue(protocolVersion, codecRegistry);
 
             for (int i = 0; i < DATA_TYPE_PRIMITIVES.size(); i++) {
                 DataType dataType = DATA_TYPE_PRIMITIVES.get(i);
@@ -374,7 +383,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // insert UDT data
             UserType alldatatypesDef = cluster.getMetadata().getKeyspace("test_nonprimitive_datatypes").getUserType("alldatatypes");
-            UDTValue alldatatypes = alldatatypesDef.newValue();
+            UDTValue alldatatypes = alldatatypesDef.newValue(protocolVersion, codecRegistry);
 
             for (int i = 0; i < DATA_TYPE_NON_PRIMITIVE_NAMES.size(); i++)
                 for (int j = 0; j < DATA_TYPE_PRIMITIVES.size(); j++) {
@@ -394,7 +403,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
                             alldatatypes.setMap(index, ImmutableMap.of(sampleElement, sampleElement));
                             break;
                         case TUPLE:
-                            alldatatypes.setTupleValue(index, cluster.getMetadata().newTupleType(dataType).newValue(sampleElement));
+                            alldatatypes.setTupleValue(index, TupleType.of(dataType).newValue(protocolVersion, codecRegistry).setObject(0, sampleElement));
                     }
                 }
 
@@ -444,19 +453,19 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // insert UDT data
             UserType depthZeroDef = cluster.getMetadata().getKeyspace("udtNestedTest").getUserType("depth_0");
-            UDTValue depthZero = depthZeroDef.newValue().setInt("age", 42).setString("name", "Bob");
+            UDTValue depthZero = depthZeroDef.newValue(protocolVersion, codecRegistry).setInt("age", 42).setString("name", "Bob");
 
             UserType depthOneDef = cluster.getMetadata().getKeyspace("udtNestedTest").getUserType("depth_1");
-            UDTValue depthOne = depthOneDef.newValue().setUDTValue("value", depthZero);
+            UDTValue depthOne = depthOneDef.newValue(protocolVersion, codecRegistry).setUDTValue("value", depthZero);
 
             UserType depthTwoDef = cluster.getMetadata().getKeyspace("udtNestedTest").getUserType("depth_2");
-            UDTValue depthTwo = depthTwoDef.newValue().setUDTValue("value", depthOne);
+            UDTValue depthTwo = depthTwoDef.newValue(protocolVersion, codecRegistry).setUDTValue("value", depthOne);
 
             UserType depthThreeDef = cluster.getMetadata().getKeyspace("udtNestedTest").getUserType("depth_3");
-            UDTValue depthThree = depthThreeDef.newValue().setUDTValue("value", depthTwo);
+            UDTValue depthThree = depthThreeDef.newValue(protocolVersion, codecRegistry).setUDTValue("value", depthTwo);
 
             UserType depthFourDef = cluster.getMetadata().getKeyspace("udtNestedTest").getUserType("depth_4");
-            UDTValue depthFour = depthFourDef.newValue().setUDTValue("value", depthThree);
+            UDTValue depthFour = depthFourDef.newValue(protocolVersion, codecRegistry).setUDTValue("value", depthThree);
 
             PreparedStatement ins = session.prepare("INSERT INTO mytable (a, b, c, d, e, f) VALUES (?, ?, ?, ?, ?, ?)");
             session.execute(ins.bind(0, depthZero, depthOne, depthTwo, depthThree, depthFour));
@@ -500,7 +509,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
 
             // insert UDT data
             UserType userTypeDef = cluster.getMetadata().getKeyspace("testUdtsWithNulls").getUserType("user");
-            UDTValue userType = userTypeDef.newValue().setString("a", null).setInt("b", 0).setUUID("c", null).setBytes("d", null);
+            UDTValue userType = userTypeDef.newValue(protocolVersion, codecRegistry).setString("a", null).setInt("b", 0).setUUID("c", null).setBytes("d", null);
 
             PreparedStatement ins = session.prepare("INSERT INTO mytable (a, b) VALUES (?, ?)");
             session.execute(ins.bind(0, userType));
@@ -516,7 +525,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             assertEquals(row.getUDTValue("b"), userType);
 
             // test empty strings
-            userType = userTypeDef.newValue().setString("a", "").setInt("b", 0).setUUID("c", null).setBytes("d", ByteBuffer.allocate(0));
+            userType = userTypeDef.newValue(protocolVersion, codecRegistry).setString("a", "").setInt("b", 0).setUUID("c", null).setBytes("d", ByteBuffer.allocate(0));
             session.execute(ins.bind(0, userType));
 
             // retrieve and verify data
@@ -565,7 +574,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             assertEquals(row.getInt("a"), 0);
 
             UserType userTypeDef = cluster.getMetadata().getKeyspace("testUdtsWithCollectionNulls").getUserType("user");
-            UDTValue userType = userTypeDef.newValue().setList("a", null).setSet("b", null).setMap("c", null).setTupleValue("d", null);
+            UDTValue userType = userTypeDef.newValue(protocolVersion, codecRegistry).setList("a", null).setSet("b", null).setMap("c", null).setTupleValue("d", null);
             assertEquals(row.getUDTValue("b"), userType);
 
             // test missing UDT args
@@ -581,7 +590,7 @@ public class UserTypesTest extends CCMBridge.PerClassSingleNodeCluster {
             row = rows.get(0);
             assertEquals(row.getInt("a"), 1);
 
-            userType = userTypeDef.newValue().setList(0, new ArrayList<Object>());
+            userType = userTypeDef.newValue(protocolVersion, codecRegistry).setList(0, new ArrayList<Object>());
             assertEquals(row.getUDTValue("b"), userType);
 
         } catch (Exception e) {

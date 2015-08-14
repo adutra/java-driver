@@ -1909,9 +1909,12 @@ public abstract class TypeCodec<T> {
 
         private final UserType definition;
 
-        public UDTCodec(UserType definition) {
+        private final CodecRegistry codecRegistry;
+
+        public UDTCodec(UserType definition, CodecRegistry codecRegistry) {
             super(definition, UDTValue.class);
             this.definition = definition;
+            this.codecRegistry = codecRegistry;
         }
 
         @Override
@@ -1927,7 +1930,7 @@ public abstract class TypeCodec<T> {
             if (value == null || value.isEmpty() || value.equals(NULL))
                 return null;
 
-            UDTValue v = definition.newValue();
+            UDTValue v = definition.newValue(ProtocolVersion.NEWEST_SUPPORTED, codecRegistry);
 
             int idx = ParseUtils.skipSpaces(value, 0);
             if (value.charAt(idx++) != '{')
@@ -1964,7 +1967,7 @@ public abstract class TypeCodec<T> {
                 }
 
                 DataType dt = definition.getFieldType(name);
-                TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(dt);
+                TypeCodec<Object> codec = codecRegistry.codecFor(dt);
                 v.set(name, codec.parse(value.substring(idx, n)), codec.getJavaType());
                 idx = n;
 
@@ -2012,7 +2015,7 @@ public abstract class TypeCodec<T> {
             if (bytes == null || bytes.remaining() == 0)
                 return null;
             ByteBuffer input = bytes.duplicate();
-            UDTValue value = definition.newValue();
+            UDTValue value = definition.newValue(protocolVersion, codecRegistry);
 
             int i = 0;
             while (input.hasRemaining() && i < value.values.length) {
@@ -2021,6 +2024,7 @@ public abstract class TypeCodec<T> {
             }
             return value;
         }
+
     }
 
     /**
@@ -2029,10 +2033,12 @@ public abstract class TypeCodec<T> {
     public static class TupleCodec extends TypeCodec<TupleValue> {
 
         private final TupleType definition;
+        private final CodecRegistry codecRegistry;
 
-        public TupleCodec(TupleType definition) {
+        public TupleCodec(TupleType definition, CodecRegistry codecRegistry) {
             super(definition, TupleValue.class);
             this.definition = definition;
+            this.codecRegistry = codecRegistry;
         }
 
         @Override
@@ -2054,7 +2060,7 @@ public abstract class TypeCodec<T> {
             if (value == null || value.isEmpty() || value.equals(NULL))
                 return null;
 
-            TupleValue v = definition.newValue();
+            TupleValue v = definition.newValue(ProtocolVersion.NEWEST_SUPPORTED, codecRegistry);
 
             int idx = ParseUtils.skipSpaces(value, 0);
             if (value.charAt(idx++) != '(')
@@ -2075,7 +2081,7 @@ public abstract class TypeCodec<T> {
                 }
 
                 DataType dt = definition.getComponentTypes().get(i);
-                TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(dt);
+                TypeCodec<Object> codec = codecRegistry.codecFor(dt);
                 v.set(i, codec.parse(value.substring(idx, n)), codec.getJavaType());
                 idx = n;
                 i += 1;
@@ -2124,7 +2130,7 @@ public abstract class TypeCodec<T> {
             if (bytes == null || bytes.remaining() == 0)
                 return null;
             ByteBuffer input = bytes.duplicate();
-            TupleValue value = definition.newValue();
+            TupleValue value = definition.newValue(protocolVersion, codecRegistry);
 
             int i = 0;
             while (input.hasRemaining() && i < value.values.length) {
@@ -2133,6 +2139,7 @@ public abstract class TypeCodec<T> {
             }
             return value;
         }
+
     }
 
     /**

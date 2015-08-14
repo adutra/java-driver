@@ -105,8 +105,8 @@ public class TableMetadata {
                 ? row.getUUID(CF_ID)
                 : null;
 
-        CassandraTypeParser.ParseResult keyValidator = CassandraTypeParser.parseWithComposite(row.getString(KEY_VALIDATOR), protocolVersion, codecRegistry);
-        CassandraTypeParser.ParseResult comparator = CassandraTypeParser.parseWithComposite(row.getString(COMPARATOR), protocolVersion, codecRegistry);
+        CassandraTypeParser.ParseResult keyValidator = CassandraTypeParser.parseWithComposite(row.getString(KEY_VALIDATOR));
+        CassandraTypeParser.ParseResult comparator = CassandraTypeParser.parseWithComposite(row.getString(COMPARATOR));
         List<String> columnAliases = cassandraVersion.getMajor() >= 2 || row.getString(COLUMN_ALIASES) == null
                                    ? Collections.<String>emptyList()
                                    : SimpleJSONParser.parseStringList(row.getString(COLUMN_ALIASES));
@@ -159,7 +159,7 @@ public class TableMetadata {
             // We have a value alias if we're dense
             if (isDense) {
                 String alias = row.isNull(VALUE_ALIAS) ? DEFAULT_VALUE_ALIAS : row.getString(VALUE_ALIAS);
-                DataType type = CassandraTypeParser.parseOne(row.getString(VALIDATOR), protocolVersion, codecRegistry);
+                DataType type = CassandraTypeParser.parseOne(row.getString(VALIDATOR));
                 otherColumns.add(ColumnMetadata.forAlias(tm, alias, type));
             }
         }

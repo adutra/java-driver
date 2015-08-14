@@ -23,6 +23,7 @@ import java.util.Map;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,16 +38,25 @@ import static com.datastax.driver.core.querybuilder.QueryBuilder.putAll;
 @CassandraVersion(major=2.1, minor=3)
 public class QueryBuilderUDTExecutionTest extends CCMBridge.PerClassSingleNodeCluster {
 
+    private ProtocolVersion protocolVersion;
+    private CodecRegistry codecRegistry;
+
     @Override
     protected Collection<String> getTableDefinitions() {
             return Arrays.asList("CREATE TYPE udt (i int, a inet)",
                 "CREATE TABLE udtTest(k int PRIMARY KEY, t frozen<udt>, l list<frozen<udt>>, m map<int, frozen<udt>>)");
     }
 
+    @BeforeMethod
+    public void setUp() throws Exception {
+        protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        codecRegistry = cluster.getConfiguration().getCodecRegistry();
+    }
+
     @Test(groups = "short")
     public void insertUdtTest() throws Exception {
         UserType udtType = cluster.getMetadata().getKeyspace(keyspace).getUserType("udt");
-        UDTValue udtValue = udtType.newValue().setInt("i", 2).setInet("a", InetAddress.getByName("localhost"));
+        UDTValue udtValue = udtType.newValue(protocolVersion, codecRegistry).setInt("i", 2).setInet("a", InetAddress.getByName("localhost"));
 
         Statement insert = new QueryBuilder(cluster).insertInto("udtTest").value("k", 1).value("t", udtValue);
         assertEquals(insert.toString(), "INSERT INTO udtTest(k,t) VALUES (1,{i:2,a:'127.0.0.1'});");
@@ -64,8 +74,8 @@ public class QueryBuilderUDTExecutionTest extends CCMBridge.PerClassSingleNodeCl
     @Test(groups = "short")
     public void should_handle_collections_of_UDT() throws Exception {
         UserType udtType = cluster.getMetadata().getKeyspace(keyspace).getUserType("udt");
-        UDTValue udtValue = udtType.newValue().setInt("i", 2).setInet("a", InetAddress.getByName("localhost"));
-        UDTValue udtValue2 = udtType.newValue().setInt("i", 3).setInet("a", InetAddress.getByName("localhost"));
+        UDTValue udtValue = udtType.newValue(protocolVersion, codecRegistry).setInt("i", 2).setInet("a", InetAddress.getByName("localhost"));
+        UDTValue udtValue2 = udtType.newValue(protocolVersion, codecRegistry).setInt("i", 3).setInet("a", InetAddress.getByName("localhost"));
 
         Statement insert = new QueryBuilder(cluster).insertInto("udtTest").value("k", 1).value("l", ImmutableList.of(udtValue));
         assertThat(insert.toString()).isEqualTo("INSERT INTO udtTest(k,l) VALUES (1,[{i:2,a:'127.0.0.1'}]);");

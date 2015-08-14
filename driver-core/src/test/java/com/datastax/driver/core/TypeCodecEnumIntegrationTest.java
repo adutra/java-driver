@@ -86,14 +86,16 @@ public class TypeCodecEnumIntegrationTest extends CCMBridge.PerClassSingleNodeCl
         );
     }
 
-    @BeforeMethod(groups="short")
-    public void before() {
-        TupleType tup = cluster.getMetadata().newTupleType(cint(), text());
-        tupleValue = tup.newValue()
+    @BeforeMethod(groups = "short")
+    public void setUp() throws Exception {
+        ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();
+        TupleType tup = TupleType.of(cint(), text());
+        tupleValue = tup.newValue(protocolVersion, codecRegistry)
             .set(0, FOO_1, Foo.class)
             .set(1, BAR_1, Bar.class);
         UserType udt = cluster.getMetadata().getKeyspace(keyspace).getUserType("\"myType\"");
-        udtValue = udt.newValue()
+        udtValue = udt.newValue(protocolVersion, codecRegistry)
             .set("foo", FOO_1, Foo.class)
             .set("bar", BAR_1, Bar.class);
     }
