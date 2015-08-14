@@ -585,9 +585,6 @@ abstract class AbstractData<T extends SettableData<T>> extends AbstractGettableD
         if (values.length != that.values.length)
             return false;
 
-        if(this.protocolVersion != that.protocolVersion)
-            return false;
-
         // Deserializing each value is slightly inefficient, but comparing
         // the bytes could in theory be wrong (for varint for instance, 2 values
         // can have different binary representation but be the same value due to
