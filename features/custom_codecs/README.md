@@ -108,22 +108,43 @@ it suffers from the overhead of deserializing raw bytes into a String,
 to only then parse the String into an object.
 More advanced solutions that read the underlying byte stream directly are possible.
 
-The second step is to register your codec:
+The second step is to find out the `CodecRegistry` instance associated with your `Cluster` instance.
+
+Most users will simply use the default `CodecRegistry` instance (`CodecRegistry.DEFAULT_INSTANCE`); 
+when you create a `Cluster` object, it will use that instance by default.
+
+To retrieve the `CodecRegistry` instance that your `Cluster` is using, do the following:
+
+```java
+CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();
+```
+
+It is however possible to instantiate a `CodecRegistry` and 
+have your `Cluster` instance use it instead:
+
+```java
+CodecRegistry codecRegistry = new CodecRegistry();
+Cluster cluster = Cluster.builder()
+    .addContactPoints(...)
+    .withCodecRegistry(codecRegistry)
+    .build();
+```
+
+Creating individual instances of `CodecRegistry` can be useful 
+e.g. if your application maintains several `Cluster` instances in parallel 
+and you want to register different codecs in each.
+
+Note that When you instantiate a `CodecRegistry`, it automatically registers all the default codecs used by the driver.
+This ensures that the new registry will not lack of an essential codec. *You cannot deregister default codecs, only
+register new ones*.
+
+The final step is to register your codec in the `CodecRegistry`:
 
 ```java
 ObjectMapper objectMapper = ...
+CodecRegistry codecRegistry = ...
 JsonCodec<MyPojo> myJsonCodec = new JsonCodec<MyPojo>(MyPojo.class, objectMapper);
-CodecRegistry myCodecRegistry = new CodecRegistry().register(myJsonCodec);
-```
-
-When you instantiate a `CodecRegistry`, it automatically registers all the default codecs used by the driver.
-This ensures that the registry will not lack of an essential codec. *You cannot deregister default codecs, only
-register new ones*.
-
-The third step is to associate your `CodecRegistry` instance with your `Cluster` instance:
-
-```java
-Cluster cluster = new Cluster.builder().withCodecRegistry(myCodecRegistry).build();
+codecRegistry.register(myJsonCodec);
 ```
 
 From now on, your codec is fully operational. It will be used every time the driver encounters
@@ -265,7 +286,7 @@ Again, the driver provides a convenient base class: [MappingCodec].
 Now, create your `CodecRegistry` and `Cluster` instances the usual way:
 
 ```java
-CodecRegistry codecRegistry = new CodecRegistry();
+CodecRegistry codecRegistry = ...;
 Cluster cluster = Cluster.builder()
     .addContactPoints(...)
     .withCodecRegistry(codecRegistry)
