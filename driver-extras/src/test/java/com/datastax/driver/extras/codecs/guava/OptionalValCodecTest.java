@@ -33,7 +33,7 @@ import static com.datastax.driver.core.TypeCodec.*;
 import static com.datastax.driver.core.querybuilder.QueryBuilder.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OptionalCodecTest extends PerClassSingleNodeCluster {
+public class OptionalValCodecTest extends PerClassSingleNodeCluster {
 
     private final OptionalCodec<List<String>> optionalCodec = new OptionalCodec<List<String>>(list(varchar()));
 
