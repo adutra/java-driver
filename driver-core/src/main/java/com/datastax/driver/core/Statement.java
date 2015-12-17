@@ -492,7 +492,7 @@ public abstract class Statement {
             return queryOptions.getDefaultIdempotence();
     }
 
-    Map<String, ByteBuffer> getOutgoingPayload() {
+    public Map<String, ByteBuffer> getOutgoingPayload() {
         return outgoingPayload;
     }
 
