@@ -15,7 +15,12 @@
  */
 package com.datastax.driver.graph;
 
+import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.PreparedStatement;
+import com.datastax.driver.core.policies.RetryPolicy;
+
+import java.nio.ByteBuffer;
+import java.util.Map;
 
 public interface PreparedGraphStatement extends PreparedStatement, GraphStatement {
 
@@ -27,4 +32,36 @@ public interface PreparedGraphStatement extends PreparedStatement, GraphStatemen
 
     String getGraphRebinding();
 
+    @Override
+    BoundGraphStatement bind(Object... values);
+
+    @Override
+    BoundGraphStatement bind();
+
+    @Override
+    PreparedGraphStatement setRoutingKey(ByteBuffer routingKey);
+
+    @Override
+    PreparedGraphStatement setRoutingKey(ByteBuffer... routingKeyComponents);
+
+    @Override
+    PreparedGraphStatement setConsistencyLevel(ConsistencyLevel consistency);
+
+    @Override
+    PreparedGraphStatement setSerialConsistencyLevel(ConsistencyLevel serialConsistency);
+
+    @Override
+    PreparedGraphStatement enableTracing();
+
+    @Override
+    PreparedGraphStatement disableTracing();
+
+    @Override
+    PreparedGraphStatement setRetryPolicy(RetryPolicy policy);
+
+    @Override
+    PreparedGraphStatement setOutgoingPayload(Map<String, ByteBuffer> payload);
+
+    @Override
+    PreparedGraphStatement setIdempotent(Boolean idempotent);
 }
