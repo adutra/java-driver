@@ -17,16 +17,15 @@ package com.datastax.driver.graph;
 
 import com.datastax.driver.core.Statement;
 
-public interface GraphStatement {
+public abstract class GraphStatement {
 
-    String getGraphLanguage();
+    private final GraphOptions graphOptions = new GraphOptions();
 
-    String getGraphKeyspace();
+    public GraphOptions getGraphOptions() {
+        return graphOptions;
+    }
 
-    String getGraphSource();
+    public abstract Statement unwrap();
 
-    String getGraphRebinding();
-
-    Statement unwrap();
 
 }

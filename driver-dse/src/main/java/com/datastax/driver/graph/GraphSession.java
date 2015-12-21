@@ -36,4 +36,12 @@ public interface GraphSession extends Session {
 
     ListenableFuture<GraphResultSet> executeGraphAsync(GraphStatement statement);
 
+    PreparedGraphStatement prepareGraph(String query);
+
+    PreparedGraphStatement prepareGraph(RegularGraphStatement statement);
+
+    ListenableFuture<PreparedGraphStatement> prepareGraphAsync(String query);
+
+    ListenableFuture<PreparedGraphStatement> prepareGraphAsync(RegularGraphStatement statement);
+
 }

@@ -15,103 +15,12 @@
  */
 package com.datastax.driver.graph;
 
-import com.datastax.driver.core.CodecRegistry;
-import com.datastax.driver.core.ProtocolVersion;
 import com.datastax.driver.core.RegularStatement;
-import com.datastax.driver.core.exceptions.InvalidQueryException;
 
-import java.nio.ByteBuffer;
-
-public abstract class RegularGraphStatement extends RegularStatement implements GraphStatement {
-
-    private String graphLanguage;
-    private String graphKeyspace;
-    private String graphSource;
-    private String graphRebinding;
+public abstract class RegularGraphStatement extends GraphStatement {
 
     @Override
-    public ByteBuffer getRoutingKey(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        // as per javadoc: implementors are free to return null
-        return null;
-    }
-
-    @Override
-    public String getKeyspace() {
-        // as per javadoc: implementors are free to return null
-        return null;
-    }
-
-    @Override
-    public RegularGraphStatement unwrap() {
-        return this;
-    }
-
-    @Override
-    public String getGraphLanguage() {
-        return graphLanguage;
-    }
-
-    /**
-     * Set the Graph language to use for this statement.
-     *
-     * @param graphLanguage the Graph language to use for this statement.
-     * @return This {@link RegularGraphStatement} instance to allow chaining call.
-     */
-    public GraphStatement setGraphLanguage(String graphLanguage) {
-        this.graphLanguage = graphLanguage;
-        return this;
-    }
-
-    @Override
-    public String getGraphKeyspace() {
-        return graphKeyspace;
-    }
-
-    /**
-     * Set the Graph keyspace to use for this statement.
-     *
-     * @param graphKeyspace the Graph keyspace to use for this statement. Throws an exception if the parameter is null or empty since this parameter is mandatory.
-     * @return This {@link RegularGraphStatement} instance to allow chaining call.
-     */
-    public GraphStatement setGraphKeyspace(String graphKeyspace) {
-        if (graphKeyspace == null || graphKeyspace.isEmpty()) {
-            throw new InvalidQueryException("You cannot set null value or empty string to the keyspace for the Graph, this field is mandatory.");
-        }
-        this.graphKeyspace = graphKeyspace;
-        return this;
-    }
-
-    @Override
-    public String getGraphSource() {
-        return graphSource;
-    }
-
-    /**
-     * Set the Graph traversal source to use for this statement.
-     *
-     * @param graphSource the Graph traversal source to use for this statement.
-     * @return This {@link RegularGraphStatement} instance to allow chaining call.
-     */
-    public GraphStatement setGraphSource(String graphSource) {
-        this.graphSource = graphSource;
-        return this;
-    }
-
-    @Override
-    public String getGraphRebinding() {
-        return graphRebinding;
-    }
-
-    /**
-     * Set the Graph rebinding name to use for this statement.
-     *
-     * @param graphRebinding the Graph rebinding name to use for this statement.
-     * @return This {@link RegularGraphStatement} instance to allow chaining call.
-     */
-    public GraphStatement setGraphRebinding(String graphRebinding) {
-        this.graphRebinding = graphRebinding;
-        return this;
-    }
+    public abstract RegularStatement unwrap();
 
 }
 

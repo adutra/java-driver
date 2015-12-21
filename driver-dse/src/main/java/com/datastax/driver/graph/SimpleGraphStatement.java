@@ -15,8 +15,7 @@
  */
 package com.datastax.driver.graph;
 
-import com.datastax.driver.core.CodecRegistry;
-import com.datastax.driver.core.ProtocolVersion;
+import com.datastax.driver.core.SimpleStatement;
 import com.datastax.driver.core.exceptions.DriverException;
 import com.google.common.base.Charsets;
 import org.apache.tinkerpop.shaded.jackson.core.JsonFactory;
@@ -41,25 +40,29 @@ public class SimpleGraphStatement extends RegularGraphStatement {
     private final String query;
     private final Map<String, Object> valuesMap;
     private ByteBuffer[] values;
-    private volatile boolean dirty = false;
+    private boolean dirty = false;
 
     protected SimpleGraphStatement(String query) {
         this.query = query;
         this.valuesMap = new HashMap<String, Object>();
     }
 
-    @Override
     public String getQueryString() {
         return query;
     }
 
-    @Override
-    public String getQueryString(CodecRegistry codecRegistry) {
-        return query;
+    public boolean hasValues() {
+        return !valuesMap.isEmpty();
     }
 
     @Override
-    public ByteBuffer[] getValues(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    public SimpleStatement unwrap() {
+        SimpleStatement stmt = new SimpleStatement(query, values);
+        stmt.setOutgoingPayload(getGraphOptions().asPayload());
+        return stmt;
+    }
+
+    private void maybeRebuildValues() {
         if (dirty) {
             JsonNodeFactory factory = new JsonNodeFactory(false);
             JsonFactory jsonFactory = new JsonFactory();
@@ -71,23 +74,8 @@ public class SimpleGraphStatement extends RegularGraphStatement {
                     ObjectNode parameter = factory.objectNode();
                     String name = param.getKey();
                     Object value = param.getValue();
-
-                    if (value instanceof Integer) {
-                        parameter.put("value", (Integer) value);
-                    } else if (value instanceof String) {
-                        parameter.put("value", (String) value);
-                    } else if (value instanceof Float) {
-                        parameter.put("value", (Float) value);
-                    } else if (value instanceof Double) {
-                        parameter.put("value", (Double) value);
-                    } else if (value instanceof Boolean) {
-                        parameter.put("value", (Boolean) value);
-                    } else if (value instanceof Long) {
-                        parameter.put("value", (Long) value);
-                    } else {
-                        throw new DriverException("Parameter : " + value + ", is not in a valid format to be sent as Gremlin parameter.");
-                    }
                     parameter.put("name", name);
+                    parameter.putPOJO("value", value);
                     GraphUtils.OBJECT_MAPPER.writeTree(generator, parameter);
                     values.add(ByteBuffer.wrap(stringWriter.toString().getBytes(Charsets.UTF_8)));
                 }
@@ -97,26 +85,6 @@ public class SimpleGraphStatement extends RegularGraphStatement {
                 throw new DriverException("Some values are not in a compatible type to be serialized in a Gremlin Query.");
             }
         }
-        return values;
     }
 
-    @Override
-    public boolean hasValues(CodecRegistry codecRegistry) {
-        return !valuesMap.isEmpty();
-    }
-
-    /**
-     * Set a parameter value for the statement.
-     * <p/>
-     * Values can be any type supported in JSON.
-     *
-     * @param name  Name of the value, defined in the query. Parameters in Gremlin are named as variables, no
-     *              need for a CQL syntax like the bind marker "?" or the identifier ":" in front of a parameter.
-     *              Please refer to Gremlin's documentation for more information.
-     * @param value Any object serializable in JSON. The type will be detected automatically at statement's execution.
-     */
-    public void set(String name, Object value) {
-        valuesMap.put(name, value);
-        dirty = true;
-    }
 }

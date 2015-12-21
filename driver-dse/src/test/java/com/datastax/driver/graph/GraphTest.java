@@ -33,7 +33,7 @@ public class GraphTest {
     public void setUpCluster() {
         Cluster cluster = Cluster.builder()
                 .addContactPoint("127.0.0.1")
-                .withQueryOptions(new GraphQueryOptions().setGraphKeyspace("comics"))
+                .withQueryOptions(new GraphOptions().setGraphKeyspace("comics"))
                 .build();
         GraphCluster graphCluster = new GraphCluster(cluster);
         session = graphCluster.connect();
@@ -66,6 +66,17 @@ public class GraphTest {
 
     @Test(groups = "unit")
     public void test4() throws Exception {
+        SimpleGraphStatement stmt = new SimpleGraphStatement("g.V().hasLabel('character').has('name', name)");
+        stmt.set("name", "BLACK PANTHER/T'CHAL");
+        GraphResultSet rs = session.executeGraph(stmt);
+        for (GraphResult result : rs) {
+            printVertex(result);
+        }
+    }
+
+    @Test(groups = "unit")
+    public void test4() throws Exception {
+        session.pre
         SimpleGraphStatement stmt = new SimpleGraphStatement("g.V().hasLabel('character').has('name', name)");
         stmt.set("name", "BLACK PANTHER/T'CHAL");
         GraphResultSet rs = session.executeGraph(stmt);

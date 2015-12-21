@@ -17,7 +17,6 @@ package com.datastax.driver.graph;
 
 import com.datastax.driver.core.*;
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -26,16 +25,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static com.google.common.base.Charsets.UTF_8;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 public class DefaultGraphSession extends AbstractSession implements GraphSession {
-
-    // Static keys for the Custom Payload map
-    private static final String GRAPH_SOURCE_KEY = "graph-source";
-    private static final String GRAPH_KEYSPACE_KEY = "graph-keyspace";
-    private static final String GRAPH_LANGUAGE_KEY = "graph-language";
-    private static final String GRAPH_REBINDING_KEY = "graph-rebinding";
 
     private final Session wrapped;
 
@@ -124,10 +114,7 @@ public class DefaultGraphSession extends AbstractSession implements GraphSession
 
     @Override
     public ListenableFuture<GraphResultSet> executeGraphAsync(GraphStatement statement) {
-        if (statement instanceof RegularGraphStatement) {
-            Map<String, ByteBuffer> payload = preparePayload((RegularGraphStatement) statement);
-            statement.unwrap().setOutgoingPayload(payload);
-        }
+        statement.getGraphOptions().merge(defaultGraphOptions());
         ResultSetFuture resultSetFuture = wrapped.executeAsync(statement.unwrap());
         return Futures.transform(resultSetFuture, new Function<ResultSet, GraphResultSet>() {
             @Override
@@ -137,37 +124,43 @@ public class DefaultGraphSession extends AbstractSession implements GraphSession
         });
     }
 
-    private ImmutableMap<String, ByteBuffer> preparePayload(RegularGraphStatement statement) {
-        GraphQueryOptions graphQueryOptions;
-        if (getCluster().getConfiguration().getQueryOptions() instanceof GraphQueryOptions)
-            graphQueryOptions = ((GraphQueryOptions) getCluster().getConfiguration().getQueryOptions());
+    @Override
+    public PreparedGraphStatement prepareGraph(String query) {
+        return prepareGraph(new SimpleGraphStatement(query));
+    }
+
+    @Override
+    public PreparedGraphStatement prepareGraph(RegularGraphStatement statement) {
+        try {
+            return Uninterruptibles.getUninterruptibly(prepareGraphAsync(statement));
+        } catch (ExecutionException e) {
+            throw DriverThrowables.propagateCause(e);
+        }
+    }
+
+    @Override
+    public ListenableFuture<PreparedGraphStatement> prepareGraphAsync(String query) {
+        return prepareGraphAsync(new SimpleGraphStatement(query));
+    }
+
+    @Override
+    public ListenableFuture<PreparedGraphStatement> prepareGraphAsync(final RegularGraphStatement statement) {
+        statement.getGraphOptions().merge(defaultGraphOptions());
+        ListenableFuture<PreparedStatement> future = wrapped.prepareAsync(statement.unwrap());
+        return Futures.transform(future, new Function<PreparedStatement, PreparedGraphStatement>() {
+            @Override
+            public PreparedGraphStatement apply(PreparedStatement input) {
+                return new DefaultPreparedGraphStatement(input, statement.getGraphOptions());
+            }
+        });
+    }
+
+    private GraphOptions defaultGraphOptions() {
+        GraphOptions defaultGraphOptions;
+        if (getCluster().getConfiguration().getQueryOptions() instanceof GraphOptions)
+            defaultGraphOptions = ((GraphOptions) getCluster().getConfiguration().getQueryOptions());
         else
-            graphQueryOptions = new GraphQueryOptions();
-
-        String graphLanguage = statement.getGraphLanguage() == null ? graphQueryOptions.getGraphLanguage() : statement.getGraphLanguage();
-        String graphKeyspace = statement.getGraphKeyspace() == null ? graphQueryOptions.getGraphKeyspace() : statement.getGraphKeyspace();
-        String graphSource = statement.getGraphSource() == null ? graphQueryOptions.getGraphSource() : statement.getGraphSource();
-        String graphRebinding = statement.getGraphRebinding() == null ? graphQueryOptions.getGraphRebinding() : statement.getGraphRebinding();
-
-        checkNotNull(graphLanguage, "Graph queries require the graph-language custom payload key to be specified");
-        checkNotNull(graphKeyspace, "Graph queries require the graph-keyspace custom payload key to be specified");
-        checkNotNull(graphSource, "Graph queries require the graph-source custom payload key to be specified");
-
-        ImmutableMap.Builder<String, ByteBuffer> payload = ImmutableMap.builder();
-
-        // preserve any existing payload
-        if (statement.unwrap().getOutgoingPayload() != null)
-            payload.putAll(statement.unwrap().getOutgoingPayload());
-
-        // and add/ override graph-specific keys
-        payload
-                .put(GRAPH_LANGUAGE_KEY, ByteBuffer.wrap(graphLanguage.getBytes(UTF_8)))
-                .put(GRAPH_KEYSPACE_KEY, ByteBuffer.wrap(graphKeyspace.getBytes(UTF_8)))
-                .put(GRAPH_SOURCE_KEY, ByteBuffer.wrap(graphKeyspace.getBytes(UTF_8)));
-
-        if (graphRebinding != null)
-            payload.put(GRAPH_REBINDING_KEY, ByteBuffer.wrap(graphRebinding.getBytes(UTF_8)));
-
-        return payload.build();
+            defaultGraphOptions = new GraphOptions();
+        return defaultGraphOptions;
     }
 }

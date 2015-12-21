@@ -15,15 +15,19 @@
  */
 package com.datastax.driver.graph;
 
+import com.datastax.driver.core.PreparedId;
 import com.datastax.driver.core.PreparedStatement;
 
-public class PreparedGraphStatement extends GraphStatement {
+import java.nio.ByteBuffer;
+import java.util.Map;
+
+public class DefaultPreparedGraphStatement implements PreparedGraphStatement {
 
     private final PreparedStatement wrapped;
 
     private final GraphOptions graphOptions;
 
-    public PreparedGraphStatement(PreparedStatement wrapped, GraphOptions graphOptions) {
+    public DefaultPreparedGraphStatement(PreparedStatement wrapped, GraphOptions graphOptions) {
         this.wrapped = wrapped;
         this.graphOptions = graphOptions;
     }
@@ -38,9 +42,31 @@ public class PreparedGraphStatement extends GraphStatement {
         return new BoundGraphStatement(wrapped.bind());
     }
 
+
     public String getQueryString() {
         return wrapped.getQueryString();
     }
 
+
+    @Override
+    public PreparedId getPreparedId() {
+        return wrapped.getPreparedId();
+    }
+
+    @Override
+    public Map<String, ByteBuffer> getIncomingPayload() {
+        return wrapped.getIncomingPayload();
+    }
+
+    @Override
+    public Map<String, ByteBuffer> getOutgoingPayload() {
+        return wrapped.getOutgoingPayload();
+    }
+
+    @Override
+    public PreparedGraphStatement setOutgoingPayload(Map<String, ByteBuffer> payload) {
+        wrapped.setOutgoingPayload(payload);
+        return this;
+    }
 
 }

@@ -16,64 +16,23 @@
 package com.datastax.driver.graph;
 
 import com.datastax.driver.core.BoundStatement;
-import com.datastax.driver.core.CodecRegistry;
-import com.datastax.driver.core.ProtocolVersion;
-
-import java.nio.ByteBuffer;
 
 /**
  * Bound graph statement produced from a prepared statement.
  */
-public class BoundGraphStatement extends BoundStatement implements GraphStatement {
+public class BoundGraphStatement extends GraphStatement {
 
     private final BoundStatement wrapped;
 
     private final PreparedGraphStatement preparedGraphStatement;
 
     BoundGraphStatement(BoundStatement wrapped) {
-        super(wrapped.preparedStatement());
         this.wrapped = wrapped;
         this.preparedGraphStatement = (PreparedGraphStatement)wrapped.preparedStatement();
     }
 
-
-    @Override
-    public ByteBuffer getRoutingKey(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        // as per javadoc: implementors are free to return null
-        return null;
+    public BoundStatement unwrap() {
+        return wrapped;
     }
-
-    @Override
-    public String getKeyspace() {
-        // as per javadoc: implementors are free to return null
-        return null;
-    }
-
-    @Override
-    public String getGraphSource() {
-        return preparedGraphStatement.getGraphSource();
-    }
-
-    @Override
-    public String getGraphLanguage() {
-        return preparedGraphStatement.getGraphLanguage();
-    }
-
-    @Override
-    public String getGraphKeyspace() {
-        return preparedGraphStatement.getGraphKeyspace();
-    }
-
-    @Override
-    public String getGraphRebinding() {
-        return preparedGraphStatement.getGraphRebinding();
-    }
-
-    @Override
-    public BoundGraphStatement unwrap() {
-        return this;
-    }
-
-    // TODO
 
 }
